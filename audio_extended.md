@@ -8,12 +8,10 @@ Version: 1.0-draft
 
 ## Stream Format
 
-Talkers and listeners must support the following sample rates:
+Talkers and listeners must support the following additional formats:
 
 | Parameter | Value |
 |-----------|-------|
 | Format | AAF (AVTP Audio Format) |
 | Bit depth | 24-bit samples packed in 32-bit integers |
 | Sample rate | 96 kHz and 192 kHz |
-
-

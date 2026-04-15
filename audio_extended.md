@@ -8,7 +8,7 @@ Version: 1.0-draft
 
 ## Stream Format
 
-All formats required by the Basic Audio Profile remain required. In addition, talkers and listeners must support the following sample rates:
+Talkers and listeners must support the following sample rates:
 
 | Parameter | Value |
 |-----------|-------|
@@ -17,8 +17,3 @@ All formats required by the Basic Audio Profile remain required. In addition, ta
 | Sample rate | 96 kHz and 192 kHz |
 
 
----
-
-## Channel Layout
-
-The channel layout rules from the Basic Audio Profile apply unchanged at all supported sample rates.

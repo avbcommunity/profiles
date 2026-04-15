@@ -8,7 +8,7 @@ Version: 1.0-draft
 
 ## Stream Format
 
-All audio streams must use the following format:
+Talker and listeners must use the following format:
 
 | Parameter | Value |
 |-----------|-------|
@@ -16,7 +16,6 @@ All audio streams must use the following format:
 | Bit depth | 24-bit samples packed in 32-bit integers |
 | Sample rate | 48 kHz |
 
-Both talkers (senders) and listeners (receivers) must support this format.
 
 ---
 

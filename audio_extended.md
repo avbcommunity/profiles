@@ -1,8 +1,8 @@
-**Version: 1.0-draft**
-
 # Extended Audio Profile
 
-This AVB community profile specifies the extended requirements for audio streaming compatibility. All requirements from the [Basic Audio Profile](audio_basic.md) apply, with the following additions.
+This AVB community profile specifies the extended requirements for audio streaming compatibility. All requirements from the Basic Audio Profile apply, with the following additions.
+
+Version: 1.0-draft
 
 ---
 
@@ -16,7 +16,6 @@ All formats required by the Basic Audio Profile remain required. In addition, ta
 | Bit depth | 24-bit samples packed in 32-bit integers |
 | Sample rate | 96 kHz and 192 kHz |
 
-Both talkers (senders) and listeners (receivers) must support both additional sample rates.
 
 ---
 

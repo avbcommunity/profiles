@@ -18,24 +18,20 @@ Both talkers (senders) and listeners (receivers) must support this format.
 
 ---
 
-## Channel Layout Rules
+## Channel Layout
 
-### Single Audio Channel
+Talkers and listeners must be able to transport audio channels using the following stream sizes, doubling from 8 up to the maximum permitted by AVTP:
 
-When carrying a single channel of audio, a device must be able to send and receive it in each of the following stream sizes:
+| Channels to transport | Stream size to use |
+|-----------------------|--------------------|
+| 1–8 | 8-channel stream |
+| 9–16 | 16-channel stream |
+| 17–32 | 32-channel stream |
+| 33–64 | 64-channel stream |
+| … and so on | next doubling up |
 
-- **1-channel stream** — the signal is in channel 1
-- **2-channel stream** — the signal is in channel 1 (channel 2 may carry the same signal or be unused)
-- **8-channel stream** — the signal is in channel 1 (other channels may carry the same signal or be unused)
+Channels are always populated starting from the lowest channel number. Any unused slots in the stream are left empty.
 
-### Multiple Discrete Channels
+If a device supports a given stream size, it must also support all smaller stream sizes in the table above. Which channels are used within those smaller streams is up to the implementer.
 
-When carrying two or more independent channels of audio:
-
-- Channels are filled starting from the lowest channel number first.
-- Up to **8 channels** may be carried in a single stream.
-- If more than 8 channels are needed, they must be grouped into streams of **8 channels each**, with the lowest channel numbers in the first stream.
-
-**Example — 12 discrete channels:**
-- Stream 1 carries channels 1–8
-- Stream 2 carries channels 9–12 (channels 13–16 are unused)
+Support for other channel counts (e.g. 1, 2, 4, 6) is optional.

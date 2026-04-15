@@ -1,3 +1,5 @@
+**Version: 1.0-draft**
+
 # Extended Audio Profile
 
 This AVB community profile specifies the extended requirements for audio streaming compatibility. All requirements from the [Basic Audio Profile](audio_basic.md) apply, with the following additions.

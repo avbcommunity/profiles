@@ -2,7 +2,7 @@
 AVB Community Profiles
 
 ## audio
-- Basic Audio Profile
+- AVB Lite Profile
 - Extended Audio Profile
 
 ## video

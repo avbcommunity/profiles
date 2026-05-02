@@ -14,7 +14,40 @@ Targets: pro audio installations of up to approximately 50 endpoints and 200 str
 
 ---
 
-## 2. Changes Relative to 802.1BA-2011
+## 2. Automatic AVB Lite Fallback
+
+An AVB endpoint that also supports AVB Lite may automatically fall back to AVB Lite when connected to a non-AVB-capable switch or network segment.
+
+Fallback detection may use any combination of the following:
+
+- Absence of 802.1AS/gPTP neighbor synchronization.
+- MSRP/SRP registration or reservation failure.
+- LLDP information indicating that the adjacent bridge does not advertise AVB/TSN capabilities.
+- Controller policy explicitly selecting AVB Lite mode for the port, device, or network.
+
+When falling back, the device must clearly advertise its active operating mode to the controller and must not use MSRP reservations for AVB Lite streams. AVB Lite streams must use the timing, QoS, admission-control, and conformance requirements defined by this profile.
+
+A device should prefer standard IEEE 802.1BA operation when a valid AVB domain is detected, unless configured otherwise by the operator or controller.
+
+---
+
+## 3. Bridging Between AVB and AVB Lite Domains
+
+A system may bridge traffic between a standard AVB domain and an AVB Lite domain using an explicit gateway or boundary device.
+
+The gateway is responsible for translating domain assumptions, including:
+
+- Clock-domain adaptation between 802.1AS/gPTP and AVB Lite PTPv2 timing.
+- Admission-control translation between MSRP/SRP and the AVB Lite controller bandwidth ledger.
+- QoS mapping between AVB SR classes and AVB Lite DSCP / 802.1p traffic classes.
+- Stream lifecycle coordination so that connection state is consistent on both sides.
+- Presentation-time offset adjustment for the combined AVB and AVB Lite path latency.
+
+Bridging must be explicit. Endpoints must not assume that AVB and AVB Lite domains are directly interoperable without a gateway that provides these translation functions.
+
+---
+
+## 4. Changes Relative to 802.1BA-2011
 
 | 802.1BA Component | Status in AVB Lite | Replacement |
 |-------------------|--------------------|-------------|
@@ -24,12 +57,12 @@ Targets: pro audio installations of up to approximately 50 endpoints and 200 str
 | 802.1Q VLAN / SR class A & B | Retained, redefined | Class A → DSCP EF (46); Class B → DSCP AF41 (34) |
 | AVTP (1722) stream format | Retained unchanged | — |
 | AVDECC (1722.1) discovery/control | Retained unchanged | — |
-| Stream Reservation Class latency targets | Relaxed | See [§5 Forwarding & QoS](#5-forwarding--qos) |
+| Stream Reservation Class latency targets | Relaxed | See [§7 Forwarding & QoS](#7-forwarding--qos) |
 | Bandwidth limit: 75% of link | Retained as engineering rule | Enforced by controller, not switches |
 
 ---
 
-## 3. Timing — PTP Profile
+## 5. Timing — PTP Profile
 
 - **Protocol:** IEEE 1588-2008 (PTPv2), default profile, end-to-end delay mechanism.
 - **Transport:** UDP/IPv4 multicast (`224.0.1.129` / `224.0.1.130`). Layer-2 PTP is optional but not required.
@@ -49,7 +82,7 @@ Targets: pro audio installations of up to approximately 50 endpoints and 200 str
 
 ---
 
-## 4. Admission Control — MSRP Replacement
+## 6. Admission Control — MSRP Replacement
 
 A logically centralized AVB Lite Controller, implemented in software and optionally co-located with one of the endpoints, performs the role that MSRP plays in classic AVB.
 
@@ -65,7 +98,7 @@ Endpoints must rate-limit their own egress to the advertised stream rate. There 
 
 ---
 
-## 5. Forwarding & QoS
+## 7. Forwarding & QoS
 
 ### Switch requirements, off-the-shelf
 
@@ -102,7 +135,7 @@ Configured presentation-time offset should be set to the table value for the net
 
 ---
 
-## 6. Stream Format
+## 8. Stream Format
 
 Unchanged from AVB:
 
@@ -113,7 +146,7 @@ Unchanged from AVB:
 
 ---
 
-## 7. Failure Modes & Mitigations
+## 9. Failure Modes & Mitigations
 
 | Failure | Behavior | Mitigation |
 |---------|----------|------------|
@@ -125,21 +158,21 @@ Unchanged from AVB:
 
 ---
 
-## 8. Conformance
+## 10. Conformance
 
 A device is AVB Lite conformant if it:
 
 1. Implements PTPv2 default profile with hardware timestamping.
-2. Marks all egress traffic with the DSCP / 802.1p values in [§5 Forwarding & QoS](#5-forwarding--qos).
+2. Marks all egress traffic with the DSCP / 802.1p values in [§7 Forwarding & QoS](#7-forwarding--qos).
 3. Implements source rate limiting per advertised stream.
-4. Speaks the controller protocol in [§4 Admission Control — MSRP Replacement](#4-admission-control--msrp-replacement) for stream advertisement and admission.
-5. Holds presentation-time accuracy within ±2× the [§3 sync target](#expected-sync-performance) under nominal load.
+4. Speaks the controller protocol in [§6 Admission Control — MSRP Replacement](#6-admission-control--msrp-replacement) for stream advertisement and admission.
+5. Holds presentation-time accuracy within ±2× the [§5 sync target](#expected-sync-performance) under nominal load.
 
-A network is AVB Lite conformant if every switch in the audio path meets the [§5 switch requirements](#switch-requirements-off-the-shelf) and is configured per the QoS table.
+A network is AVB Lite conformant if every switch in the audio path meets the [§7 switch requirements](#switch-requirements-off-the-shelf) and is configured per the QoS table.
 
 ---
 
-## 9. Open Questions
+## 11. Open Questions
 
 - Whether to define a redundancy mode, using parallel paths à la Milan / IEEE 802.1CB. This is currently out of scope.
 - Whether to allow L3-routed audio across PTP boundary clocks. Section 3 does not preclude it, but the latency table assumes a single L2 domain.

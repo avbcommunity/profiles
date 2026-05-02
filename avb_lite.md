@@ -8,7 +8,7 @@ Version: 1.0-draft
 
 ## 1. Scope
 
-AVB Lite reuses the AVB endpoint stack, including AVTP streams, stream IDs, and presentation time, but replaces the network-side requirements of IEEE 802.1BA so that the system runs on any gigabit switch with DiffServ QoS and IGMP snooping.
+AVB Lite reuses the AVB endpoint stack, including AVTP streams, stream IDs, and presentation time, but replaces the network-side requirements of IEEE 802.1BA so that the system runs on any gigabit switch with VLAN/802.1p QoS and IGMP snooping.
 
 Targets: live audio and video installations of up to approximately 50 endpoints and 200 streams, on a single L2 domain.
 
@@ -38,11 +38,12 @@ The gateway is responsible for translating domain assumptions, including:
 
 - Clock-domain adaptation between 802.1AS/gPTP and the AVB Lite PTP profile.
 - Admission-control translation between MSRP/SRP and the AVB Lite controller bandwidth ledger.
-- QoS mapping between AVB SR classes and AVB Lite DSCP / 802.1p traffic classes.
+- QoS mapping between AVB SR classes and AVB Lite 802.1p traffic classes.
+- VLAN ID translation where the AVB and AVB Lite domains use different VLAN IDs or where one side is untagged.
 - Stream lifecycle coordination so that connection state is consistent on both sides.
 - Presentation-time offset adjustment for the combined AVB and AVB Lite path latency.
 
-Bridging must be explicit. Endpoints must not assume that AVB and AVB Lite domains are directly interoperable without a gateway that provides these translation functions.
+Bridging must be explicit. Endpoints must not assume that AVB and AVB Lite domains are directly interoperable without a gateway that provides these translation functions. VLAN identity is local to each domain and must not be assumed to be the same across the gateway.
 
 ---
 
@@ -52,8 +53,8 @@ Bridging must be explicit. Endpoints must not assume that AVB and AVB Lite domai
 |-------------------|--------------------|-------------|
 | 802.1AS (gPTP) | Removed | AVB Lite PTP profile over Layer-2 Ethernet, with hardware timestamping at endpoints |
 | 802.1Qat (MSRP) | Removed | Centralized admission control in controller software |
-| 802.1Qav (FQTSS / credit-based shaper) | Removed | Strict-priority queueing via 802.1p / DSCP |
-| 802.1Q VLAN / SR class A & B | Retained, redefined | Class A → DSCP EF (46); Class B → DSCP AF41 (34) |
+| 802.1Qav (FQTSS / credit-based shaper) | Removed | Strict-priority queueing via 802.1p |
+| 802.1Q VLAN / SR class A & B | Retained, redefined | Media streams use configurable VLAN ID, default 2, with Class A and Class B → 802.1p priority 5 |
 | AVTP (1722) stream format | Retained unchanged | — |
 | AVDECC (1722.1) discovery/control | Retained unchanged | — |
 | Stream Reservation Class latency targets | Relaxed | See [§7 Forwarding & QoS](#7-forwarding--qos) |
@@ -75,7 +76,7 @@ Required profile behavior:
 - **Sync interval:** 125 ms, log -3, for Sync; 1 s for Announce.
 - **Delay mechanism:** End-to-end delay measurement must be supported. Peer-to-peer delay measurement is outside the base profile.
 - **Servo:** PI controller with outlier rejection. A Kalman filter is recommended on networks greater than 3 hops.
-- **QoS marking for PTP:** 802.1p priority 6.
+- **QoS marking for PTP:** VLAN ID 0 priority-tagged frames with 802.1p priority 7.
 - **Best Master Clock Algorithm:** Standard BMCA, with configurable static `priority1` / `priority2` values to allow operators to pin the grandmaster.
 - **Domain:** The PTP domain number must be configurable. All devices participating in the same AVB Lite media system must use the same PTP domain.
 
@@ -91,15 +92,27 @@ Required profile behavior:
 
 ## 6. Admission Control — MSRP Replacement
 
-A logically centralized AVB Lite Controller, implemented in software and optionally co-located with one of the endpoints, performs the role that MSRP plays in classic AVB.
+AVB Lite replaces bridge-processed MSRP with endpoint-processed MSRP-compatible signaling that is forwarded by non-AVB switches.
 
-Required behaviors:
+All talkers and listeners operating in AVB Lite mode must support and send these messages regardless of any other ATDECC support.
 
-1. **Topology discovery:** Use LLDP queries from each endpoint, plus optional SNMP polling of switches for link speed.
-2. **Bandwidth ledger:** The controller maintains a per-link committed bandwidth tally. New stream advertisements that would push any link beyond 75% of its rate are refused.
-3. **Path computation:** Use simple shortest-path computation on the discovered graph for admission accounting only. Actual forwarding is done by switches via IGMP snooping.
-4. **Stream lifecycle:** Use an `advertise → admit → ready → start → stop` state machine, replacing MSRP's Talker/Listener attribute exchange. The state machine is encoded in JSON over TCP, port `17220` suggested.
-5. **Stale reservation cleanup:** Each endpoint sends a 30 s heartbeat. Missing heartbeats release reserved bandwidth.
+Two MVU messages are defined:
+
+| MVU message | Purpose |
+|-------------|---------|
+| `mvu_msrp_talker` | Carries MSRP Talker declarations, including Talker Advertise and Talker Failed. |
+| `mvu_msrp_listener` | Carries MSRP Listener declarations, including Listener Ready, Listener Ready Failed, and Listener Asking Failed. |
+
+The payload of each MVU message must contain the MSRP message content starting at the MSRP Attribute Type field and continuing through the End Mark of the MSRP message. The payload is therefore the MSRP attribute list and end mark, without requiring the MRP/MSRP link-local transport that non-AVB switches may block.
+
+Required behavior:
+
+1. **Talker declaration:** A talker advertises available streams using `mvu_msrp_talker` sent untagged to the Ethernet broadcast destination address `ff:ff:ff:ff:ff:ff`.
+2. **Listener declaration:** A listener sends `mvu_msrp_listener` untagged and unicast to the source MAC address of the received talker declaration.
+3. **Leave behavior:** Listener leave and talker withdrawal use the corresponding MSRP declaration semantics carried in the appropriate MVU message.
+4. **Payload compatibility:** MSRP attribute contents, declaration types, intervals, and timeout behavior should mirror MSRP where applicable.
+5. **Admission rule:** A talker must not start or continue a stream if doing so would exceed 75% committed egress utilization on its transmitting interface.
+6. **Refresh and timeout:** Talkers and listeners must refresh declarations using MSRP-like timing. Stale declarations must be aged out using MSRP-like timeout behavior.
 
 Endpoints must rate-limit their own egress to the advertised stream rate. There is no in-network shaper to catch a misbehaving talker.
 
@@ -107,9 +120,17 @@ Endpoints must rate-limit their own egress to the advertised stream rate. There 
 
 ## 7. Forwarding & QoS
 
+AVB Lite uses the following VLAN and priority model:
+
+- **PTP:** VLAN ID 0 priority-tagged frames with 802.1p priority 7.
+- **ATDECC and MVU MSRP messages:** untagged frames with no 802.1p priority requirement.
+- **Media streams:** VLAN-tagged frames using VLAN ID 2 by default, or another configured VLAN ID, with 802.1p priority 5.
+
+The media stream VLAN ID must be configurable. Untagged media-stream operation may be supported for simple networks, but 802.1p priority marking requires VLAN-tagged frames.
+
 ### Switch requirements, off-the-shelf
 
-- 802.1p / DSCP-based strict-priority queueing, minimum 4 queues.
+- 802.1p-based strict-priority queueing, minimum 4 queues.
 - IGMP snooping v2 or v3.
 - EEE (802.3az) disabled on all ports carrying media streams.
 - Flow control (802.3x) disabled.
@@ -119,13 +140,13 @@ Endpoints must rate-limit their own egress to the advertised stream rate. There 
 
 ### Traffic classes
 
-| Class | DSCP | 802.1p | Queue | Use |
-|-------|------|--------|-------|-----|
-| PTP | N/A | 6 | Highest | Sync / Delay-Req / Delay-Resp |
-| Media Class A | EF (46) | 5 | Highest, shared with PTP | ≤ 2 ms latency streams |
-| Media Class B | AF41 (34) | 4 | High | ≤ 10 ms latency streams |
-| Control: AVDECC, controller | CS3 (24) | 3 | Medium | Discovery, enumeration |
-| Best effort | 0 | 0 | Default | Everything else |
+| Class | 802.1p | Queue | Use |
+|-------|--------|-------|-----|
+| PTP | 7 | Highest | Sync / Delay-Req / Delay-Resp |
+| Media Class A | 5 | High | ≤ 2 ms latency streams |
+| Media Class B | 5 | High | ≤ 10 ms latency streams |
+| ATDECC / MVU MSRP | N/A | Default | Discovery, enumeration, admission signaling |
+| Best effort | 0 | Default | Everything else |
 
 ### Expected end-to-end latency
 
@@ -172,17 +193,9 @@ General stream requirements:
 A device is AVB Lite conformant if it:
 
 1. Implements the AVB Lite PTP profile over Layer-2 Ethernet, with hardware timestamping.
-2. Marks all egress traffic with the DSCP / 802.1p values in [§7 Forwarding & QoS](#7-forwarding--qos).
+2. Marks PTP and media stream egress traffic with the VLAN and 802.1p values in [§7 Forwarding & QoS](#7-forwarding--qos).
 3. Implements source rate limiting per advertised stream.
-4. Speaks the controller protocol in [§6 Admission Control — MSRP Replacement](#6-admission-control--msrp-replacement) for stream advertisement and admission.
+4. Supports the `mvu_msrp_talker` and `mvu_msrp_listener` messages defined in [§6 Admission Control — MSRP Replacement](#6-admission-control--msrp-replacement) for stream advertisement and admission.
 5. Holds presentation-time accuracy within ±2× the [§5 sync target](#expected-sync-performance) under nominal load.
 
 A network is AVB Lite conformant if every switch in the media path meets the [§7 switch requirements](#switch-requirements-off-the-shelf) and is configured per the QoS table.
-
----
-
-## 11. Open Questions
-
-- Whether to define a redundancy mode, using parallel paths à la Milan / IEEE 802.1CB. This is currently out of scope.
-- Whether to allow L3-routed media streams across PTP boundary clocks. The base profile assumes a single L2 domain.
-- DSCP remarking by intermediate switches is a real-world hazard and may need a trust-boundary appendix.

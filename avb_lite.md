@@ -1,6 +1,6 @@
 # AVB Lite Specification
 
-A profile for deploying AVB-style deterministic audio streaming over standard managed Ethernet switches: no 802.1AS, no MSRP, and no credit-based shaper required.
+A profile for deploying AVB-style deterministic live media streaming over standard managed Ethernet switches: no 802.1AS, no MSRP, and no credit-based shaper required.
 
 Version: 1.0-draft
 
@@ -10,20 +10,19 @@ Version: 1.0-draft
 
 AVB Lite reuses the AVB endpoint stack, including AVTP streams, stream IDs, and presentation time, but replaces the network-side requirements of IEEE 802.1BA so that the system runs on any gigabit switch with DiffServ QoS and IGMP snooping.
 
-Targets: pro audio installations of up to approximately 50 endpoints and 200 streams, on a single L2 domain or routed via PTP-aware boundaries.
+Targets: live audio and video installations of up to approximately 50 endpoints and 200 streams, on a single L2 domain.
 
 ---
 
 ## 2. Automatic AVB Lite Fallback
 
-An AVB endpoint that also supports AVB Lite may automatically fall back to AVB Lite when connected to a non-AVB-capable switch or network segment.
+An AVB endpoint that also supports AVB Lite must automatically fall back to AVB Lite when it detects that it is not connected to an AVB-capable link.
 
 Fallback detection may use any combination of the following:
 
 - Absence of 802.1AS/gPTP neighbor synchronization.
 - MSRP/SRP registration or reservation failure.
-- LLDP information indicating that the adjacent bridge does not advertise AVB/TSN capabilities.
-- Controller policy explicitly selecting AVB Lite mode for the port, device, or network.
+- A user-specific detection or policy mechanism outside the scope of this specification.
 
 When falling back, the device must clearly advertise its active operating mode to the controller and must not use MSRP reservations for AVB Lite streams. AVB Lite streams must use the timing, QoS, admission-control, and conformance requirements defined by this profile.
 
@@ -37,7 +36,7 @@ A system may bridge traffic between a standard AVB domain and an AVB Lite domain
 
 The gateway is responsible for translating domain assumptions, including:
 
-- Clock-domain adaptation between 802.1AS/gPTP and AVB Lite PTPv2 timing.
+- Clock-domain adaptation between 802.1AS/gPTP and AVB Lite SMPTE ST 2059-2 timing.
 - Admission-control translation between MSRP/SRP and the AVB Lite controller bandwidth ledger.
 - QoS mapping between AVB SR classes and AVB Lite DSCP / 802.1p traffic classes.
 - Stream lifecycle coordination so that connection state is consistent on both sides.
@@ -51,7 +50,7 @@ Bridging must be explicit. Endpoints must not assume that AVB and AVB Lite domai
 
 | 802.1BA Component | Status in AVB Lite | Replacement |
 |-------------------|--------------------|-------------|
-| 802.1AS (gPTP) | Removed | IEEE 1588v2 default profile with hardware timestamping at endpoints |
+| 802.1AS (gPTP) | Removed | IEEE 1588 PTP using the SMPTE ST 2059-2 profile over Layer-2 Ethernet, with hardware timestamping at endpoints |
 | 802.1Qat (MSRP) | Removed | Centralized admission control in controller software |
 | 802.1Qav (FQTSS / credit-based shaper) | Removed | Strict-priority queueing via 802.1p / DSCP |
 | 802.1Q VLAN / SR class A & B | Retained, redefined | Class A → DSCP EF (46); Class B → DSCP AF41 (34) |
@@ -64,12 +63,12 @@ Bridging must be explicit. Endpoints must not assume that AVB and AVB Lite domai
 
 ## 5. Timing — PTP Profile
 
-- **Protocol:** IEEE 1588-2008 (PTPv2), default profile, end-to-end delay mechanism.
-- **Transport:** UDP/IPv4 multicast (`224.0.1.129` / `224.0.1.130`). Layer-2 PTP is optional but not required.
+- **Protocol:** IEEE 1588 PTP using the SMPTE ST 2059-2 PTP profile. All devices in an AVB Lite timing domain must use the same PTP profile.
+- **Transport:** PTP must use Layer-2 Ethernet transport within an AVB Lite timing domain. UDP/IP PTP transport must not be used unless explicitly specified by a future profile extension.
 - **Timestamping:** Hardware timestamping is mandatory at all endpoints, at NIC or PHY level. Switches are not required to be boundary clocks or transparent clocks.
 - **Sync interval:** 125 ms, log -3, for Sync; 1 s for Announce.
 - **Servo:** PI controller with outlier rejection. A Kalman filter is recommended on networks greater than 3 hops.
-- **QoS marking for PTP:** DSCP EF (46), 802.1p priority 6.
+- **QoS marking for PTP:** 802.1p priority 6.
 - **Best Master Clock Algorithm:** Standard BMCA, with configurable static `priority1` / `priority2` values to allow operators to pin the grandmaster.
 
 ### Expected sync performance
@@ -104,25 +103,25 @@ Endpoints must rate-limit their own egress to the advertised stream rate. There 
 
 - 802.1p / DSCP-based strict-priority queueing, minimum 4 queues.
 - IGMP snooping v2 or v3.
-- EEE (802.3az) disabled on all ports carrying audio.
+- EEE (802.3az) disabled on all ports carrying media streams.
 - Flow control (802.3x) disabled.
 - Optional but recommended:
   - Per-port storm control.
-  - Jumbo frames disabled on the audio VLAN.
+  - Jumbo frames disabled on the media VLAN.
 
 ### Traffic classes
 
 | Class | DSCP | 802.1p | Queue | Use |
 |-------|------|--------|-------|-----|
-| PTP | EF (46) | 6 | Highest | Sync / Delay-Req / Delay-Resp |
-| Audio Class A | EF (46) | 5 | Highest, shared with PTP | ≤ 2 ms latency streams |
-| Audio Class B | AF41 (34) | 4 | High | ≤ 10 ms latency streams |
+| PTP | N/A | 6 | Highest | Sync / Delay-Req / Delay-Resp |
+| Media Class A | EF (46) | 5 | Highest, shared with PTP | ≤ 2 ms latency streams |
+| Media Class B | AF41 (34) | 4 | High | ≤ 10 ms latency streams |
 | Control: AVDECC, controller | CS3 (24) | 3 | Medium | Discovery, enumeration |
 | Best effort | 0 | 0 | Default | Everything else |
 
 ### Expected end-to-end latency
 
-Talker sample to listener sample. Assumes gigabit links, ≤ 75% utilization on audio queues, and hardware-timestamped endpoints.
+Talker media timestamp to listener presentation. Assumes gigabit links, ≤ 75% utilization on media queues, and hardware-timestamped endpoints.
 
 | Hops | Class A target | Class B target |
 |------|----------------|----------------|
@@ -137,12 +136,14 @@ Configured presentation-time offset should be set to the table value for the net
 
 ## 8. Stream Format
 
-Unchanged from AVB:
+AVB Lite does not define a media payload format. Stream formats are defined by the applicable audio, video, clock-reference, or application profile.
 
-- AVTP (IEEE 1722) AAF or CRF payload.
-- 48 kHz / 96 kHz, 16/24/32-bit PCM.
-- Up to 8 channels per stream; higher counts use stream bundling.
-- Presentation time in the AVTP header references the PTP-disciplined clock.
+General stream requirements:
+
+- Media streams use AVTP (IEEE 1722).
+- Stream IDs and presentation time are retained from AVB operation.
+- Presentation time in the AVTP header references the PTP-disciplined clock defined by this profile.
+- Stream bandwidth and packet rate must be advertised to the AVB Lite Controller for admission control.
 
 ---
 
@@ -151,7 +152,7 @@ Unchanged from AVB:
 | Failure | Behavior | Mitigation |
 |---------|----------|------------|
 | GM clock loss | BMCA elects new GM; brief offset transient | Servo holdover; 200 ms typical recovery |
-| Switch congestion in audio queue | Increased jitter, possible drops | Controller refuses admission past 75%; operator alarm |
+| Switch congestion in media queue | Increased jitter, possible drops | Controller refuses admission past 75%; operator alarm |
 | Endpoint misbehaving, over-rate | No in-network protection | Source-side rate limiter mandatory; controller monitors via SNMP/telemetry where available |
 | EEE accidentally enabled | Sync degrades, audible artifacts | Controller probes for EEE via LLDP-MED; warns operator |
 | PTP packets deprioritized by misconfigured switch | Sync collapses | Continuous offset monitoring; alarm at > 50 µs sustained |
@@ -162,18 +163,18 @@ Unchanged from AVB:
 
 A device is AVB Lite conformant if it:
 
-1. Implements PTPv2 default profile with hardware timestamping.
+1. Implements IEEE 1588 PTP using the SMPTE ST 2059-2 profile over Layer-2 Ethernet, with hardware timestamping.
 2. Marks all egress traffic with the DSCP / 802.1p values in [§7 Forwarding & QoS](#7-forwarding--qos).
 3. Implements source rate limiting per advertised stream.
 4. Speaks the controller protocol in [§6 Admission Control — MSRP Replacement](#6-admission-control--msrp-replacement) for stream advertisement and admission.
 5. Holds presentation-time accuracy within ±2× the [§5 sync target](#expected-sync-performance) under nominal load.
 
-A network is AVB Lite conformant if every switch in the audio path meets the [§7 switch requirements](#switch-requirements-off-the-shelf) and is configured per the QoS table.
+A network is AVB Lite conformant if every switch in the media path meets the [§7 switch requirements](#switch-requirements-off-the-shelf) and is configured per the QoS table.
 
 ---
 
 ## 11. Open Questions
 
 - Whether to define a redundancy mode, using parallel paths à la Milan / IEEE 802.1CB. This is currently out of scope.
-- Whether to allow L3-routed audio across PTP boundary clocks. Section 3 does not preclude it, but the latency table assumes a single L2 domain.
+- Whether to allow L3-routed media streams across PTP boundary clocks. The base profile assumes a single L2 domain.
 - DSCP remarking by intermediate switches is a real-world hazard and may need a trust-boundary appendix.

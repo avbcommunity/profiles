@@ -36,7 +36,7 @@ A system may bridge traffic between a standard AVB domain and an AVB Lite domain
 
 The gateway is responsible for translating domain assumptions, including:
 
-- Clock-domain adaptation between 802.1AS/gPTP and AVB Lite SMPTE ST 2059-2 timing.
+- Clock-domain adaptation between 802.1AS/gPTP and the AVB Lite PTP profile.
 - Admission-control translation between MSRP/SRP and the AVB Lite controller bandwidth ledger.
 - QoS mapping between AVB SR classes and AVB Lite DSCP / 802.1p traffic classes.
 - Stream lifecycle coordination so that connection state is consistent on both sides.
@@ -50,7 +50,7 @@ Bridging must be explicit. Endpoints must not assume that AVB and AVB Lite domai
 
 | 802.1BA Component | Status in AVB Lite | Replacement |
 |-------------------|--------------------|-------------|
-| 802.1AS (gPTP) | Removed | IEEE 1588 PTP using the SMPTE ST 2059-2 profile over Layer-2 Ethernet, with hardware timestamping at endpoints |
+| 802.1AS (gPTP) | Removed | AVB Lite PTP profile over Layer-2 Ethernet, with hardware timestamping at endpoints |
 | 802.1Qat (MSRP) | Removed | Centralized admission control in controller software |
 | 802.1Qav (FQTSS / credit-based shaper) | Removed | Strict-priority queueing via 802.1p / DSCP |
 | 802.1Q VLAN / SR class A & B | Retained, redefined | Class A → DSCP EF (46); Class B → DSCP AF41 (34) |
@@ -61,15 +61,23 @@ Bridging must be explicit. Endpoints must not assume that AVB and AVB Lite domai
 
 ---
 
-## 5. Timing — PTP Profile
+## 5. Timing — AVB Lite PTP Profile
 
-- **Protocol:** IEEE 1588 PTP using the SMPTE ST 2059-2 PTP profile. All devices in an AVB Lite timing domain must use the same PTP profile.
+AVB Lite defines a media-oriented IEEE 1588 PTP profile that uses Layer-2 Ethernet transport and borrows the media-alignment goals of SMPTE ST 2059-2 where applicable. It is not a claim of strict SMPTE ST 2059-2 conformance.
+
+Required profile behavior:
+
+- **Protocol:** IEEE 1588 PTP. All devices in an AVB Lite timing domain must use this AVB Lite PTP profile.
 - **Transport:** PTP must use Layer-2 Ethernet transport within an AVB Lite timing domain. UDP/IP PTP transport must not be used unless explicitly specified by a future profile extension.
+- **Timescale:** Devices must use a common PTP timescale for media presentation. Grandmasters should provide valid UTC/TAI offset and time-property information when available.
+- **Media alignment:** Audio sample clocks, video frame timing, and AVTP presentation times must be derived from the PTP-disciplined clock so independently transported streams can be phase-aligned at receivers.
 - **Timestamping:** Hardware timestamping is mandatory at all endpoints, at NIC or PHY level. Switches are not required to be boundary clocks or transparent clocks.
 - **Sync interval:** 125 ms, log -3, for Sync; 1 s for Announce.
+- **Delay mechanism:** End-to-end delay measurement must be supported. Peer-to-peer delay measurement is outside the base profile.
 - **Servo:** PI controller with outlier rejection. A Kalman filter is recommended on networks greater than 3 hops.
 - **QoS marking for PTP:** 802.1p priority 6.
 - **Best Master Clock Algorithm:** Standard BMCA, with configurable static `priority1` / `priority2` values to allow operators to pin the grandmaster.
+- **Domain:** The PTP domain number must be configurable. All devices participating in the same AVB Lite media system must use the same PTP domain.
 
 ### Expected sync performance
 
@@ -163,7 +171,7 @@ General stream requirements:
 
 A device is AVB Lite conformant if it:
 
-1. Implements IEEE 1588 PTP using the SMPTE ST 2059-2 profile over Layer-2 Ethernet, with hardware timestamping.
+1. Implements the AVB Lite PTP profile over Layer-2 Ethernet, with hardware timestamping.
 2. Marks all egress traffic with the DSCP / 802.1p values in [§7 Forwarding & QoS](#7-forwarding--qos).
 3. Implements source rate limiting per advertised stream.
 4. Speaks the controller protocol in [§6 Admission Control — MSRP Replacement](#6-admission-control--msrp-replacement) for stream advertisement and admission.

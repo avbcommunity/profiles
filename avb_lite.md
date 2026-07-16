@@ -8,7 +8,7 @@ Version: 1.0-draft
 
 ## 1. Scope
 
-AVB Lite reuses the AVB endpoint stack, including AVTP streams, stream IDs, and presentation time, but replaces the network-side requirements of IEEE 802.1BA so that the system runs on any gigabit switch with VLAN/802.1p QoS and IGMP snooping.
+AVB Lite reuses the AVB endpoint stack, including AVTP streams, stream IDs, and presentation time, but replaces the network-side requirements of IEEE 802.1BA so that the system runs on any gigabit switch with VLAN/802.1p QoS support.
 
 Targets: live audio and video installations of up to approximately 50 endpoints and 200 streams, on a single L2 domain.
 
@@ -172,14 +172,55 @@ Endpoints must use this exact `protocol_id` for AVB Lite CVU SRP messages and mu
 
 Required behavior:
 
-1. **Talker declaration:** A talker advertises available streams using `cvu_srp_talker` sent untagged to the Ethernet broadcast destination address `ff:ff:ff:ff:ff:ff`.
-2. **Listener declaration:** A listener sends `cvu_srp_listener` untagged and unicast to the source MAC address of the received talker declaration.
+1. **Talker declaration:** A talker advertises available streams using `cvu_srp_talker` sent to the Ethernet broadcast destination address `ff:ff:ff:ff:ff:ff`, VLAN-tagged in the media VLAN (see [Stream transport addressing](#stream-transport-addressing), item 5).
+2. **Listener declaration:** A listener sends `cvu_srp_listener` unicast to the source MAC address of the received talker declaration, VLAN-tagged in the media VLAN.
 3. **Leave behavior:** Listener leave and talker withdrawal use the corresponding MSRP declaration semantics carried in the appropriate CVU SRP message.
 4. **Payload compatibility:** MSRP attribute contents, declaration types, intervals, and timeout behavior should mirror MSRP where applicable.
 5. **Admission rule:** A talker must not start or continue a stream if doing so would exceed 75% committed egress utilization on its transmitting interface.
 6. **Refresh and timeout:** Talkers and listeners must refresh declarations using MSRP-like timing. Stale declarations must be aged out using MSRP-like timeout behavior.
 
 Endpoints must rate-limit their own egress to the advertised stream rate. There is no in-network shaper to catch a misbehaving talker.
+
+### Stream transport addressing
+
+AVB Lite media streams are **unicast by default**. A talker must not transmit
+a stream to a multicast destination address except through the escalation
+path in item 3 below. On non-AVB switches, multicast-addressed streams are
+flooded to every port of the broadcast domain (there is no MSRP pruning, and
+IGMP snooping does not apply to non-IP L2 multicast), degrading every
+attached device and any Wi-Fi segment. Unicast confines each stream to the
+switch's learned path for that listener.
+
+Required behavior:
+
+1. **Unicast required by default:** A talker must transmit each admitted
+   stream as unicast to the listener's MAC address, learned from the source
+   MAC of that listener's `cvu_srp_listener` declaration. The AVTP
+   `stream_id` is unchanged and remains the stream's identity; the
+   destination MAC is transport addressing only.
+2. **Multiple listeners:** A talker supporting more than one listener per
+   stream duplicates the stream frames per listener, each unicast, up to a
+   talker-defined fan-out limit (minimum 1, recommended 2). Bandwidth
+   admission (§6.5) counts each copy against the 75% egress budget.
+3. **Multicast escalation:** Beyond its unicast fan-out limit, a talker may
+   escalate the stream to a multicast destination address (MAAP-allocated).
+   The active destination MAC is always the one carried in the talker's
+   `cvu_srp_talker` declaration; listeners must follow destination-address
+   changes there and re-filter without tearing down the stream. Deployments
+   that escalate to multicast must isolate the AVB Lite segment or confine
+   the media VLAN at a managed-switch boundary.
+4. **Listener behavior:** Listeners accept stream frames whose destination is
+   either their own MAC or the advertised multicast address, matching streams
+   by `stream_id`.
+5. **Address learning:** Endpoints transmit their CVU SRP declarations
+   VLAN-tagged in the media VLAN. Switches with independent (per-VLAN) MAC
+   learning otherwise never observe a listener's source address inside the
+   stream VLAN and flood the talker's unicast stream frames to every port as
+   unknown-unicast, silently defeating unicast transport. The periodic CVU
+   refresh doubles as the filtering-database keep-alive, well inside typical
+   switch ageing times.
+
+MAAP address acquisition is required only when multicast escalation is used.
 
 ---
 
@@ -188,7 +229,8 @@ Endpoints must rate-limit their own egress to the advertised stream rate. There 
 AVB Lite uses the following VLAN and priority model:
 
 - **PTP:** VLAN ID 0 priority-tagged frames with 802.1p priority 7.
-- **ATDECC and CVU SRP messages:** untagged frames with no 802.1p priority requirement.
+- **CVU SRP messages:** VLAN-tagged in the media VLAN with 802.1p priority 5 (they double as the filtering-database keep-alive, see [Stream transport addressing](#stream-transport-addressing), item 5).
+- **Other ATDECC messages:** untagged frames with no 802.1p priority requirement.
 - **Media streams:** VLAN-tagged frames using VLAN ID 2 by default, or another configured VLAN ID, with 802.1p priority 5.
 
 The media stream VLAN ID must be configurable. Untagged media-stream operation may be supported for simple networks, but 802.1p priority marking requires VLAN-tagged frames.
@@ -196,12 +238,15 @@ The media stream VLAN ID must be configurable. Untagged media-stream operation m
 ### Switch requirements, off-the-shelf
 
 - 802.1p-based strict-priority queueing, minimum 4 queues.
-- IGMP snooping v2 or v3.
 - EEE (802.3az) disabled on all ports carrying media streams.
 - Flow control (802.3x) disabled.
 - Optional but recommended:
   - Per-port storm control.
   - Jumbo frames disabled on the media VLAN.
+  - IGMP snooping (general multicast hygiene only — it does not contain
+    AVTP L2 multicast; escalated streams need segment isolation or a
+    managed-switch VLAN boundary, see
+    [Stream transport addressing](#stream-transport-addressing)).
 
 ### Traffic classes
 

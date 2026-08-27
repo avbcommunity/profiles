@@ -81,7 +81,7 @@ For streams flowing wired-to-wireless, the bridge shall re-address each stream f
 A station acting as a talker shall address its stream frames as follows:
 
 1. **In SRP and ATDECC declarations**, the talker advertises a normal MAAP-allocated (or locally administered) multicast destination address. A station's globally administered factory MAC is not a legal SRP `destination_address` (802.1Q 35.2.2.8.3 permits only multicast or locally administered addresses), and the advertised DA is what wired listeners and bridges must continue to see.
-2. **On the air**, the talker transmits stream frames individually addressed to the bridge's wireless MAC (the BSSID). The bridge restores the talker's advertised destination address on wired egress, keyed by `stream_id`.
+2. **On the air**, the talker transmits stream frames individually addressed using a carrier destination: the BSSID with the locally administered (U/L) bit set. Any individual MSDU destination earns the unicast air treatment, since the 802.11 receiver address is the BSSID for every uplink frame regardless, but split AP architectures (host processor plus radio coprocessor) commonly consume an MSDU addressed to the AP's own MAC inside the radio and never deliver it to the bridge host, so the plain BSSID must not be used. Flipping the U/L bit yields a deterministic locally administered unicast carrier that needs no discovery and collides with no real device. The bridge restores the talker's advertised destination address on wired egress, keyed by `stream_id`, so the carrier value is otherwise opaque.
 3. Where the listener is another station in the same BSS, per-listener unicast copies addressed per AVB Lite unicast transport apply; the AP relays individually addressed frames without the group addressed penalty.
 4. Group addressed stream transmission by a station is permitted only as a last-resort compatibility fallback and should be expected to carry no more than a few hundred packets per second.
 
@@ -110,6 +110,6 @@ Note that the deliverable unicast rate bounds the practical stream count: with r
 | Stream frames individually addressed on the WLAN | §3.1 |
 | Bridge translates downlink streams to listener MACs from SRP state | §3.2 |
 | Bridge never escalates to group addressing on the wireless port | §3.2 |
-| Wireless talker advertises MAAP DA, transmits to the BSSID | §3.3 |
+| Wireless talker advertises MAAP DA, transmits to the U/L-flipped BSSID carrier | §3.3 |
 | Listener accepts own-MAC or advertised DA, matches by stream_id | §3.4 |
 | Class B only by default over the wireless hop | §4 |

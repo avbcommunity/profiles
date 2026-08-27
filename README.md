@@ -5,6 +5,9 @@ AVB Community Profiles
 - AVB Lite Profile
 - Extended Audio Profile
 
+## wireless
+- AVB Wireless Profile
+
 ## video
 - Basic Video Profile
 - Extended Video Profile

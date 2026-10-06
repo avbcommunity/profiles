@@ -58,7 +58,7 @@ If the operator or controller knows the topology has changed and the network is 
 
 A future revision of this profile may define a coordinated, network-wide promotion protocol if real-world deployments demonstrate the need.
 
-When falling back, the device must clearly advertise its active operating mode to the controller and must not use MSRP reservations for AVB Lite streams. AVB Lite streams must use the timing, QoS, admission-control, and conformance requirements defined by this profile.
+When falling back, the device must clearly advertise its active operating mode to the controller, through the status query defined in [§2.4](#24-mode-reporting), and must not use MSRP reservations for AVB Lite streams. AVB Lite streams must use the timing, QoS, admission-control, and conformance requirements defined by this profile.
 
 A device should prefer standard IEEE 802.1BA operation when neither §2.2 condition is met, unless configured otherwise by the operator or controller.
 
@@ -79,6 +79,44 @@ The beacon `Pdelay_Req` is informational only:
 - A receiver in gPTP mode that observes the beacon shall treat it identically to a §2.1 Endpoint Declaration TLV in any other Pdelay message: the §2.2 condition 1 signal fires and that receiver also falls back.
 
 Endpoints in gPTP mode are not required to emit beacon frames — the §2.1 TLV in their normal `Pdelay_{Req,Resp,Resp_Follow_Up}` traffic is sufficient. The beacon exists only to maintain the §2.2 condition 1 signal after fallback has silenced the normal Pdelay exchange.
+
+### 2.4 Mode Reporting
+
+Every AVB Lite-capable endpoint shall report its operating mode to controllers through the AVB Lite status query, an IEEE 1722.1 AECP `VENDOR_UNIQUE_COMMAND` / `VENDOR_UNIQUE_RESPONSE` exchange under the same MA-S OUI as CVU SRP (§6), with sub-protocol identifier `0x003`:
+
+| Bits  | Field | Value |
+|-------|-------|-------|
+| 47–12 | MA-S OUI | `0x8C1F6436C` |
+| 11–0  | Sub-protocol identifier | `0x003` |
+
+Encoded as 6 bytes on the wire: `8C 1F 64 36 C0 03`.
+
+The command and the response start with the same fields after `protocol_id`:
+
+| Offset | Length | Field | Value |
+|--------|--------|-------|-------|
+| 0 | 2 | `u` (bit 15), `command_type` (bits 14–0) | `u` is 1 in an unsolicited response; `command_type` is `0x0000`, GET_LITE_STATUS |
+| 2 | 2 | `avb_interface_index` | The AVB_INTERFACE descriptor the status is for |
+
+The command carries nothing more. The response continues:
+
+| Offset | Length | Field | Value |
+|--------|--------|-------|-------|
+| 4 | 1 | `flags` | Bit 0 CAPABLE: the endpoint supports AVB Lite. Bit 1 ACTIVE: the interface operates in AVB Lite. Bit 2 OFFSET_VALID: `offset_from_grandmaster` holds a measurement. Bit 3 EGRESS_VALID: `committed_egress` is kept. Other bits zero. |
+| 5 | 1 | `fallback_reason` | Why the interface operates in AVB Lite: 0 none (standard AVB), 1 an Endpoint Declaration TLV was received (§2.2 condition 1), 2 nine `Pdelay_Req` went unanswered (condition 2), 3 two or more responders answered one `Pdelay_Req` (condition 3), 4 configured by the operator or a controller |
+| 6 | 1 | `ptp_profile` | 0 IEEE 802.1AS gPTP, 1 the AVB Lite PTP profile (§5) |
+| 7 | 1 | `ptp_domain` | The PTP domain number |
+| 8 | 2 | `media_vlan_id` | The media VLAN, 0 when streams are untagged |
+| 10 | 1 | `unicast_fanout_limit` | Unicast copies of a stream before multicast escalation (§6), 0 for a listener-only endpoint |
+| 11 | 1 | reserved | 0 |
+| 12 | 4 | `link_speed` | The interface's link speed in Mb/s, 0 when not known |
+| 16 | 4 | `committed_egress` | Bandwidth of the admitted streams the interface sends, in kb/s, each unicast copy counted, as the §6 admission rule counts it |
+| 20 | 8 | `grandmaster_identity` | The clock identity of the grandmaster the endpoint follows |
+| 28 | 4 | `offset_from_grandmaster` | The servo's last offset from the grandmaster in nanoseconds, signed |
+
+The response's `status` is SUCCESS, NO_SUCH_DESCRIPTOR for an `avb_interface_index` the endpoint does not have, or NOT_IMPLEMENTED from an endpoint without AVB Lite support. An endpoint shall answer within the AECP command timeout.
+
+An endpoint shall send the response unsolicited, with `u` set, to each controller registered for unsolicited notifications (IEEE 1722.1-2021 REGISTER_UNSOLICITED_NOTIFICATION) whenever any field other than `offset_from_grandmaster` changes, and whenever the offset crosses the §9 alarm threshold of 50 µs in either direction. Controllers wanting to follow the offset more closely poll the query; once every 5 s is enough for the §9 alarm.
 
 ---
 

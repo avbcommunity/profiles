@@ -25,10 +25,13 @@ To enable peer endpoints to detect each other across a non-AVB bridge that flood
 | Field | Width | Value |
 |-------|-------|-------|
 | `tlvType` | 2 bytes | `0x0003` (ORGANIZATION_EXTENSION, IEEE 1588-2008 §14.3.2) |
-| `lengthField` | 2 bytes | `0x0007` (length of `organizationId` + `organizationSubType` + `dataField` = 3 + 3 + 1) |
+| `lengthField` | 2 bytes | `0x0008` (length of `organizationId` + `organizationSubType` + `dataField` + `pad` = 3 + 3 + 1 + 1) |
 | `organizationId` | 3 bytes | `8C:1F:64` (24-bit MA-L prefix of the MA-S OUI `0x8C1F6436C`) |
 | `organizationSubType` | 3 bytes | `36:C0:01` (top 12 bits = MA-S suffix `0x36C`, bottom 12 bits = AVB Lite TLV sub-id `0x001` for Endpoint Declaration) |
 | `dataField` | 1 byte | `0x01` = "I am an endpoint, not a bridge" |
+| `pad` | 1 byte | `0x00`, ignored by receivers |
+
+IEEE 1588 requires every TLV's `lengthField` to be even, and implementations enforce it: linuxptp's ptp4l, for one, discards a whole message carrying a TLV with an odd `lengthField`. The `pad` octet keeps the TLV even. Earlier revisions of this profile gave `lengthField` as `0x0007` with no `pad`; receivers should accept a `lengthField` of 7 or more and read `dataField` at the same offset, so that endpoints of either revision recognize each other.
 
 A compliant 802.1AS bridge terminates the Pdelay protocol at its boundary clock and re-originates `Pdelay_Req`, `Pdelay_Resp`, and `Pdelay_Resp_Follow_Up` from its own port without copying endpoint-originated TLVs, so the Endpoint Declaration TLV does not survive transit through an AVB-aware bridge. Per IEEE 1588-2008 §13.4, recipients that do not recognize a TLV must ignore it; this preserves backward compatibility with non-AVB-Lite-aware bridges and endpoints.
 

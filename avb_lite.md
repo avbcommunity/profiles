@@ -207,7 +207,7 @@ Required profile behavior:
 - **Delay mechanism:** End-to-end delay measurement must be supported. Peer-to-peer delay measurement is outside the base profile.
 - **Unicast delay requests:** A grandmaster-capable endpoint shall support mixed multicast/unicast operation (IEEE 1588-2019, 16.9), answering a unicast `Delay_Req` with a unicast `Delay_Resp`. A follower should send its `Delay_Req` unicast, to the MAC address the grandmaster's Announce came from, and send them multicast again if no `Delay_Resp` answers. Announce, Sync and Follow_Up stay multicast. Endpoints then no longer receive every other endpoint's delay exchange.
 - **Servo:** PI controller with outlier rejection. A Kalman filter is recommended on networks greater than 3 hops.
-- **QoS marking for PTP:** Endpoints should send PTP priority-tagged, VLAN ID 0 with 802.1p priority 7, and must accept PTP both tagged that way and untagged. A platform that cannot tag PTP sends it untagged; on an enhanced network its PTP then waits in the default queue, and its sync degrades under load.
+- **QoS marking for PTP:** Endpoints should send PTP priority-tagged, VLAN ID 0 with 802.1p priority 7, and must accept PTP both tagged that way and untagged. A platform that cannot tag PTP sends it untagged; on an enhanced network its PTP then waits in the default queue, and its sync degrades under load. A switch may also remove the tag, so the priority can count at the first switch only ([Priority tags](#priority-tags)).
 - **Best Master Clock Algorithm:** Standard BMCA. Default `priority1` values follow IEEE 802.1AS-2020, Table 8-1: 246 for an endpoint its maker intends as grandmaster, 248 for other grandmaster-capable endpoints that stay on the network, 250 for transient ones such as laptops, and 255 for an endpoint that cannot be grandmaster, which then never becomes one. Default `priority2` is 248. Operators may set `priority1` and `priority2` to pin the grandmaster.
 - **Domain:** The PTP domain number must be configurable, default 0. All devices participating in the same AVB Lite media system must use the same PTP domain.
 
@@ -405,11 +405,19 @@ The media VLAN ID must be configurable, and every AVB Lite device in a system us
 
 Untagged media streams may be supported for simple networks, but carry no priority; VLAN 0 is preferred there.
 
+### Priority tags
+
+A priority tag, VLAN ID 0, does not always survive a switch. A VLAN-aware switch assigns a frame tagged with VLAN ID 0 to the receiving port's untagged VLAN, and a port that sends that VLAN untagged sends the frame on without a tag: its priority counts at that switch and is lost beyond it. Some unmanaged switches do the same. A frame tagged with any other VLAN ID, the media VLAN 2 among them, keeps its tag. On the bench this profile was checked on, an unmanaged switch delivered an endpoint's PTP, sent with VLAN ID 0 and priority 7, untagged, while the same endpoint's VLAN 2 media kept their tags. So:
+
+- Receivers must accept PTP untagged as well as priority-tagged, and, with media VLAN 0, media frames untagged as well.
+- Media VLAN 2 keeps priority 5 across every switch; media VLAN 0 keeps it to the first switch only.
+- PTP's priority 7 holds to the first switch only, unless the switches give PTP its priority themselves ([Enhanced networks](#enhanced-networks-managed-switch-configuration), item 1).
+
 ### Baseline networks: unmanaged switches
 
 AVB Lite assumes only what common unmanaged switches do as they come:
 
-- **Tagged frames:** forwarded unchanged, up to 1522 octets, with addresses learned whatever the VLAN.
+- **Tagged frames:** forwarded unchanged, up to 1522 octets, with addresses learned whatever the VLAN; a priority tag may be removed ([Priority tags](#priority-tags)).
 - **Multicast:** flooded to every port. This carries PTP to `01:1B:19:00:00:00`, ATDECC to `91:E0:F0:01:00:00`, and escalated streams.
 - **`01:80:C2:00:00:0E`:** flooded or filtered; fallback handles either (§2.2).
 - **Queueing:** anything from none to a fixed 802.1p or DSCP mapping, strict or weighted. Tags cost nothing where priority is ignored and help where it is honored.
@@ -425,7 +433,7 @@ What a baseline network gives:
 
 On every switch port that carries AVB Lite media, PTP or CVU SRP, links between switches included:
 
-1. **QoS classification:** by 802.1p (trust CoS) on ingress, not by port or by DSCP alone.
+1. **QoS classification:** by 802.1p (trust CoS) on ingress, not by port or by DSCP alone. Where the switch can, also put PTP in the highest queue by its ethertype (`0x88F7`) or destination (`01:1B:19:00:00:00`), since a previous switch may have removed its priority tag; or, on links between switches, send each port's untagged VLAN tagged, so the priority travels on ([Priority tags](#priority-tags)).
 2. **Scheduling:** strict priority, at least for the queues PTP and media use. Weighted round robin lets best-effort traffic delay media.
 3. **Priority to queue:** 7 to the highest queue, 5 to the one below it, everything else lower. IEEE 802.1Q's recommended mapping (IEEE 802.1Q-2022, Table 8-5) already does this with three or more queues; with four, priorities 6 and 7 go to queue 3, 4 and 5 to queue 2, 2 and 3 to queue 1, and 0 and 1 to queue 0. With two queues PTP and media share the high one.
 4. **Media VLAN 2:** create VLAN 2, and make every port with an AVB Lite device and every link between switches a tagged member of it. Leave each port's untagged VLAN (PVID) as it was: ATDECC, MAAP and priority-tagged PTP use it. With media VLAN 0 there is nothing to configure here.
@@ -490,6 +498,7 @@ General stream requirements:
 | Media VLAN missing on a managed switch | Media and CVU SRP dropped at the port; listeners never settle | Configure per §7, or use media VLAN 0 |
 | Unregistered multicast filtered (IGMP snooping) | PTP and ATDECC lost: endpoints free-run, entities disappear | Flood unregistered multicast (§7) |
 | More listeners than a talker's fan-out limit, escalation not allowed | The further listeners are refused with Talker Failed, failure code 2 | Allow escalation where the media VLAN is confined (§2.4, §6), or use a talker with a higher fan-out limit |
+| Priority tags removed by a switch | PTP, and media in VLAN 0, lose their priority past the first switch | Media VLAN 2; on managed switches, classify PTP by ethertype (§7) |
 | Mixed link speeds | Constant offset of up to 2.6 µs between endpoints | Grandmaster Link TLV correction (§5) |
 
 ---

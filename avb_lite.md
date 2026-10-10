@@ -157,6 +157,69 @@ The same protocol carries SET_LITE_CONFIG, `command_type` `0x0001`, with which a
 
 The response carries the configuration the interface has after the command. Its `status` is SUCCESS; NO_SUCH_DESCRIPTOR for an `avb_interface_index` the endpoint does not have; BAD_ARGUMENTS when a reserved bit is set; ENTITY_ACQUIRED or ENTITY_LOCKED when another controller has acquired or locked the entity, as for AEM's SET commands; or NOT_IMPLEMENTED from an endpoint without AVB Lite support. The configuration persists across restarts, and escalation is not allowed until a controller or the operator allows it. A change is reported with an unsolicited GET_LITE_STATUS response.
 
+### 2.5 Start-up Sequences (informative)
+
+This section shows how §2.2 and §2.3 play out after a link-up, and how an endpoint can keep start-up short. It adds no requirements.
+
+#### What sets the pace
+
+- **The decision.** Conditions 1 and 3 fire on what an endpoint hears: an Endpoint Declaration TLV, or a second responder to one `Pdelay_Req`. With `Pdelay_Req` sent once a second, that is within the first Pdelay cycle when peers are in gPTP mode, or within 3 s when a peer that has fallen back announces itself only through its §2.3 beacon. Condition 2 waits out nine unanswered requests, about 9 s, and is the slowest path.
+- **The PTP start.** Whichever profile the endpoint ends up in, its PTP must then reach the grandmaster: in gPTP, a few Pdelay exchanges before the port is asCapable, then the grandmaster's Announce and Sync; in the AVB Lite PTP profile, the grandmaster's Announce and Sync with no peer delay at all. Either takes a few seconds, depending on the implementation; call these times *T*<sub>gPTP</sub> and *T*<sub>Lite</sub>.
+- **A switch of profile.** Moving between gPTP and the AVB Lite PTP profile starts the PTP from scratch, so each switch costs that start again. An endpoint that switches profiles twice during start-up pays twice.
+
+#### The cases
+
+Each row starts from a link-up with the endpoint in gPTP, as §2.2 arms it.
+
+| Network at link-up | What the endpoint hears | Decision | In sync after |
+|---|---|---|---|
+| An 802.1AS bridge | One responder to each `Pdelay_Req`, no TLV; the bridge also asks for peer delay itself, once a second | Stays in gPTP | *T*<sub>gPTP</sub> |
+| A non-AVB switch, with an AVB Lite endpoint that has already fallen back | Its beacon | Condition 1, within 3 s | at most 3 s + *T*<sub>Lite</sub> |
+| A non-AVB switch, with AVB Lite endpoints starting together | Each other's `Pdelay_Req` and `Pdelay_Resp` carrying the TLV | Condition 1, within about 1 s | about 1 s + *T*<sub>Lite</sub> |
+| A non-AVB switch, with two or more gPTP devices that are not AVB Lite endpoints | Two or more responders to one `Pdelay_Req` | Condition 3, within about 1 s | about 1 s + *T*<sub>Lite</sub> |
+| A non-AVB switch, with exactly one gPTP device that is not an AVB Lite endpoint, and no AVB Lite endpoint | One responder, no TLV | Stays in gPTP, that device its peer; a later beacon still brings the fallback | *T*<sub>gPTP</sub> |
+| A switch that filters `01:80:C2:00:00:0E`, or nothing else on the link | No responder | Condition 2, after about 9 s | about 9 s + *T*<sub>Lite</sub> |
+
+The third row is why an endpoint in gPTP mode carries the TLV in its own Pdelay messages (§2.1): endpoints that start together find each other within one Pdelay cycle instead of waiting for a beacon.
+
+#### Keeping start-up short
+
+1. **Start gPTP at link-up rather than waiting to decide.** The conditions are evaluated on gPTP's own Pdelay exchange, so behind a bridge no time is lost, and on a non-AVB switch the evidence usually arrives within the first second or two.
+2. **Act on evidence at once.** A TLV or a second responder needs no further waiting; only condition 2 waits out its window.
+3. **Resume rather than restart.** An endpoint re-armed while it already runs the AVB Lite PTP profile, as after a restart of its PTP (§2.2.1) or a cable moved from one switch to another, need not leave the profile to evaluate. A beacon or other TLV keeps it there. An AVB bridge's port asks for peer delay once a second, so a single gPTP peer asking without the TLV points to a bridge; two or more asking show a switch flooding `01:80:C2:00:00:0E`, which the endpoint may treat as condition 3; and none asking within about 9 s is condition 2's silence. Starting gPTP as soon as that single peer is heard, while still listening for a beacon, overlaps *T*<sub>gPTP</sub> with the rest of the beacon interval. Behind a bridge the endpoint is then in sync about 1 s + *T*<sub>gPTP</sub> after re-arming, instead of a full beacon interval followed by *T*<sub>gPTP</sub>.
+4. **Correct a wrong guess at once.** If an endpoint that moved to gPTP early then hears a TLV, it returns to the AVB Lite PTP profile immediately, not after any rate limit it applies to profile switches; the §2.2 latch then holds it there.
+
+#### Example timelines
+
+Behind an 802.1AS bridge:
+
+```
+0 s        link-up; gPTP starts; fallback evaluation armed
+within 1 s the bridge's Pdelay_Req heard and answered; the endpoint's
+           own first Pdelay_Req answered by one responder, no TLV
+a few s    asCapable; the bridge's Announce and Sync; grandmaster chosen
+T(gPTP)    in sync; still in gPTP
+```
+
+On a non-AVB switch whose grandmaster is an AVB Lite endpoint that has fallen back:
+
+```
+0 s        link-up; gPTP starts; fallback evaluation armed
+within 3 s the grandmaster's beacon carries the TLV: condition 1
+           PTP restarts in the AVB Lite PTP profile; CVU SRP declarations
++T(Lite)   in sync; link-speed correction from the Grandmaster Link TLV
+```
+
+Resuming after a restart of the endpoint's PTP, its last profile the AVB Lite PTP profile, with the cable now on an 802.1AS bridge:
+
+```
+0 s        re-armed while still in the AVB Lite PTP profile
+within 1 s the bridge asks for peer delay, no TLV: one gPTP peer
+           gPTP starts at once, while listening for a beacon
+3 s        no beacon: no AVB Lite endpoint has fallen back on this link
+1 s+T(gPTP) in sync in gPTP
+```
+
 ---
 
 ## 3. Bridging Between AVB and AVB Lite Domains

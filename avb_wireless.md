@@ -39,7 +39,7 @@ The two cannot be combined by converting FTM timestamps through the beacon's TSF
 
 ### 2.2 Announce and Signaling, Both Modes
 
-Neither the beacon element nor FTM carries the grandmaster's priority, clock quality or `stepsRemoved`. The access point shall send §12.2 Announce, individually addressed, and gPTP-capable Signaling to each associated station, and shall process the message interval request TLV in the station's Signaling as §12.8.2 specifies: `logTimeSyncInterval` -3 by default, 127 to stop, 126 for the initial value, -128 for no change, and unsupported values ignored, with `logLinkDelayInterval` sent as -128 and ignored on 802.11. A station sends standard Signaling; it needs no custom frames or elements of its own.
+Neither the beacon element nor FTM carries the grandmaster's priority, clock quality or `stepsRemoved`. The access point shall send §12.2 Announce, individually addressed, and gPTP-capable Signaling to each associated station, and shall process the message interval request TLV in the station's Signaling as §12.8.2 specifies: `logTimeSyncInterval` -3 by default, 127 to stop, 126 for the initial value, -128 for no change, and unsupported values ignored, with `logLinkDelayInterval` sent as -128 and ignored on 802.11. In Mode A every station receives the same beacon element, which cannot follow one station's request: the access point applies the request to what it sends that station alone, and a station that asked it to stop ignores the beacon element. A station sends standard Signaling; it needs no custom frames or elements of its own.
 
 ### 2.3 Mode A: Beacon Carrier
 
@@ -58,7 +58,9 @@ The access point shall publish one 802.11 Vendor Specific element in its Beacon 
 | AP TSF | 8 bytes | The access point's TSF in microseconds, unsigned, little-endian |
 | Capture bracket | 2 bytes, optional | Microseconds between the two captures, unsigned, little-endian, `0xFFFF` when not known |
 
-In the beacon element, `preciseOriginTimestamp` plus `correctionField` give the grandmaster's time at the instant the access point sampled its TSF, not at the departure of an FTM or TM frame as in §12.7; the Follow_Up's other fields keep their §12.7 meaning. The access point shall sample the gPTP time and the TSF as nearly simultaneously as the platform allows. Any residual gap should be one-sided, gPTP sampled first, so stations can follow the envelope of the samples (§2.3.3). When the beacon goes out does not matter: the station's TSF follows the access point's through each beacon's Timestamp field. Where the platform installs vendor elements by a call, both values are refreshed in the same call, so a beacon never pairs one refresh's gPTP time with another's TSF.
+In the beacon element, `preciseOriginTimestamp` plus `correctionField` give the grandmaster's time at the instant the access point sampled its TSF, not at the departure of an FTM or TM frame as in §12.7; the Follow_Up's other fields keep their §12.7 meaning. The access point shall sample the gPTP time and the TSF as nearly simultaneously as the platform allows. Any residual gap should be one-sided, gPTP sampled first, so stations can follow the envelope of the samples (§2.3.3). When the beacon goes out does not matter: the station's TSF follows the access point's through each beacon's Timestamp field. Where the platform installs vendor elements by a call, both values are refreshed in the same call, so a beacon never pairs one refresh's gPTP time with another's TSF. An access point whose gPTP and radio are on separate chips does not learn the gap until the element is installed, so it normally leaves the capture bracket out.
+
+Platforms that model a vendor element as a 3-octet OUI and a type octet see this one as OUI `8C:1F:64`, type `0x36`, and data starting `C0 06`; stations match all three.
 
 The access point refreshes the element from its own gPTP state at its Sync interval, 125 ms, without blocking its wired gPTP: a refresh that stalls the wired port's Pdelay exchange costs its asCapable. It shall keep the TLV's `gmTimeBaseIndicator` and `lastGmPhaseChange` current, so stations see a change of grandmaster rather than inferring one from a jump.
 
@@ -111,6 +113,7 @@ The access point:
 
 - **Power save.** A station stays in active mode while it is synchronized or streaming: power save drops beacons and FTM frames, and the radio's clock may not be readable while it sleeps.
 - **A new time source.** A new BSSID, or the access point's TSF going backward by more than a second on three beacons in a row, which marks an access point reset, is a new time source: the station discards its markers and fits and acquires again. The TSF is 64 bits in microseconds and does not wrap in practice.
+- **Locked and holdover.** A station's time is locked once it has finished acquiring, its servo has converged by its own measure, and it has applied a time element, beacon or FTM, within the last three Sync intervals (375 ms at log -3). It is holding over when it was locked and has applied none since. In Mode A, acquiring ends with the first step after the envelope's peak hold (§2.3.3).
 - **Until locked.** A station should not present media until its time is locked: a listener mutes, and a talker holds off or sends with presentation times marked invalid (`tv` 0). On loss of lock it gates again.
 
 ### 2.7 Migration
@@ -180,20 +183,20 @@ The command carries nothing more. The response continues:
 
 | Offset | Length | Field | Value |
 |--------|--------|-------|-------|
-| 4 | 1 | `flags` | Bit 0 ACCESS_POINT: the interface is an access point's wireless port, else a station's. Bit 1 LOCKED: a station's time is locked (§2.6). Bit 2 HOLDOVER: a station is holding over without updates. Bit 3 SERVO_ERROR_VALID. Bit 4 RTT_VALID. Bit 5 CLASS_A_ALLOWED (§5.2). Other bits zero. |
+| 4 | 1 | `flags` | Bit 0 ACCESS_POINT: the interface is an access point's wireless port, else a station's. Bit 1 LOCKED: a station's time is locked (§2.6). Bit 2 HOLDOVER: a station is holding over (§2.6). Bit 3 SERVO_ERROR_VALID. Bit 4 RTT_VALID. Bit 5 CLASS_A_ALLOWED (§5.2). Other bits zero. |
 | 5 | 1 | `time_mode` | 0 none, 1 Mode A, beacon carrier (§2.3), 2 Mode B over FTM, 3 Mode B over TM (§2.4) |
 | 6 | 1 | `band` | 0 not known, 1 2.4 GHz, 2 5 GHz, 3 6 GHz |
 | 7 | 1 | `channel` | The primary channel number, 0 when not known |
 | 8 | 2 | `channel_width` | In MHz, 0 when not known |
-| 10 | 1 | `phy_generation` | The Wi-Fi generation of the negotiated PHY: 4 802.11n, 5 802.11ac, 6 802.11ax, 7 802.11be; 0 when not known |
+| 10 | 1 | `phy_generation` | The Wi-Fi generation of the negotiated PHY: 3 802.11a, b or g, 4 802.11n, 5 802.11ac, 6 802.11ax, 7 802.11be; 0 when not known |
 | 11 | 1 | `rssi` | A station's RSSI from its access point in dBm, signed; `0x7F` on an access point, whose per-station RSSI is in the station list, or when not known |
 | 12 | 2 | `phy_rate` | A station's current transmit PHY rate in Mb/s, 0 when not known |
-| 14 | 1 | `ftm_success` | Percent of FTM measurements valid over the last 10 s; `0xFF` without FTM |
-| 15 | 1 | `as_capable_reason` | Why asCapable is FALSE on a Mode B station, 0 when it is TRUE, or in Mode A, whose port is not an IEEE 802.1AS port: 1 FTM frames per burst granted other than three or two (§12.4), 2 neither FTM nor TM with the other end, 3 no gPTP-capable Signaling from it |
-| 16 | 1 | `ftm_burst_frames` | Frames per burst granted, 0 without FTM |
+| 14 | 1 | `ftm_success` | A station's percent of FTM measurements valid over the last 10 s; `0xFF` without FTM, and on an access point |
+| 15 | 1 | `as_capable_reason` | Why asCapable is FALSE on a Mode B station, 0 when it is TRUE, in Mode A, whose port is not an IEEE 802.1AS port, and on an access point, where asCapable is per station: 1 FTM frames per burst granted other than three or two (§12.4), 2 neither FTM nor TM with the other end, 3 no gPTP-capable Signaling from it |
+| 16 | 1 | `ftm_burst_frames` | A station's frames per burst granted; 0 without FTM; `0xFF` when not known, as where the platform reports no grant, and on an access point |
 | 17 | 1 | `listeners_unserved` | An access point's listeners Ready on its wireless port that it does not serve, beyond its fan-out limit (§3.2); 0 on a station, `0xFF` when not known |
-| 18 | 1 | `ftm_burst_duration` | The granted Burst Duration as IEEE 802.11 encodes it (2 for 250 µs up to 11 for 128 ms, 15 for no preference), 0 without FTM |
-| 19 | 1 | `ftm_min_delta` | The granted Min Delta FTM in units of 100 µs, as IEEE 802.11 encodes it, 0 without FTM |
+| 18 | 1 | `ftm_burst_duration` | A station's granted Burst Duration as IEEE 802.11 encodes it (2 for 250 µs up to 11 for 128 ms, 15 for no preference); 0 without FTM; `0xFF` when not known, and on an access point |
+| 19 | 1 | `ftm_min_delta` | A station's granted Min Delta FTM in units of 100 µs, as IEEE 802.11 encodes it; 0 without FTM; `0xFF` when not known, and on an access point |
 | 20 | 4 | `ftm_rtt` | The last valid FTM round trip in nanoseconds, signed (RTT_VALID) |
 | 24 | 4 | `servo_error` | A station's servo error estimate in nanoseconds, signed (SERVO_ERROR_VALID); not an absolute measurement against the grandmaster |
 | 28 | 4 | `association_age` | Seconds since a station associated, or since an access point started its BSS |
@@ -208,7 +211,7 @@ The command carries nothing more. The response continues:
 | 68 | 2 | `station_count` | The station entries that follow, on an access point; 0 on a station |
 | 70 | 8 × n | `stations` | Per associated station: its MAC (6 bytes), its RSSI in dBm, signed (1 byte, `0x7F` when not known), and flags (1 byte: bit 0 FTM_INITIATOR, bit 1 FTM_KNOWN, whether the access point knows the station's FTM capability); as many as fit the response, the rest left out |
 
-With `bssid` and `ap_port_identity` a controller places a station under its access point; GET_AS_PATH names the bridge's clock but not its BSSID. Counters wrap. The response's `status` is SUCCESS, NO_SUCH_DESCRIPTOR for an `avb_interface_index` the entity does not have, NOT_SUPPORTED for an interface that is not wireless, or NOT_IMPLEMENTED from an entity without AVB Wireless support.
+On an access point, the fields that only a station has, its RTT, servo error and FTM values, are left unknown: RTT_VALID and SERVO_ERROR_VALID clear, and the FTM fields as above. An access point may answer the station list from a cache refreshed outside the command's path, as where reading it means a call to a separate radio chip. With `bssid` and `ap_port_identity` a controller places a station under its access point; GET_AS_PATH names the bridge's clock but not its BSSID. Counters wrap. The response's `status` is SUCCESS, NO_SUCH_DESCRIPTOR for an `avb_interface_index` the entity does not have, NOT_SUPPORTED for an interface that is not wireless, or NOT_IMPLEMENTED from an entity without AVB Wireless support.
 
 An entity shall send the response unsolicited, with `u` set, to each controller registered for unsolicited notifications whenever `flags`, `time_mode`, `band`, `channel`, `channel_width`, `phy_generation`, `as_capable_reason`, the granted burst, `listeners_unserved`, `bssid`, `ap_port_identity` or `station_count` changes. The measurements and counters change too often for that; controllers poll them, once every 5 s at most.
 
@@ -221,7 +224,7 @@ The command and the response carry, after `avb_interface_index`:
 | 4 | 1 | `config_flags` | Bit 0 CLASS_A_ALLOWED: an access point admits Class A toward its wireless port, the §1 bench-test opt-in. Other bits zero. |
 | 5 | 3 | reserved | 0 |
 
-The response carries the configuration the interface has after the command. Its `status` is SUCCESS; NO_SUCH_DESCRIPTOR; BAD_ARGUMENTS for a reserved bit, or CLASS_A_ALLOWED on a station; ENTITY_ACQUIRED or ENTITY_LOCKED when another controller holds the entity; NOT_SUPPORTED for an interface that is not wireless; or NOT_IMPLEMENTED. CLASS_A_ALLOWED does not persist across restarts, so the default comes back. A change is reported with an unsolicited GET_WIRELESS_STATUS response.
+The response carries the configuration the interface has after the command. Its `status` is SUCCESS; NO_SUCH_DESCRIPTOR; BAD_ARGUMENTS for a reserved bit, or CLASS_A_ALLOWED on a station; ENTITY_ACQUIRED or ENTITY_LOCKED when another controller holds the entity; NOT_SUPPORTED for an interface that is not wireless; or NOT_IMPLEMENTED. CLASS_A_ALLOWED does not persist across restarts, so the default comes back. A change applies to streams already declared as well as new ones: the access point runs admission again for them, so a Talker Failed it declared for Class A clears without waiting for the talker to declare again. A change is reported with an unsolicited GET_WIRELESS_STATUS response.
 
 ---
 

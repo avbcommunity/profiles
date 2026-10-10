@@ -86,7 +86,7 @@ A future revision of this profile may define a coordinated, network-wide promoti
 
 When falling back, the device must clearly advertise its active operating mode to the controller, through the status query defined in [§2.4](#24-mode-reporting), and must not use MSRP reservations for AVB Lite streams. AVB Lite streams must use the timing, QoS, admission-control, and conformance requirements defined by this profile.
 
-A device should prefer standard IEEE 802.1BA operation when neither §2.2 condition is met, unless configured otherwise by the operator or controller.
+A device should prefer standard IEEE 802.1BA operation when none of the §2.2 conditions is met, unless configured otherwise by the operator or controller.
 
 ### 2.3 Post-Fallback Endpoint Beacon
 

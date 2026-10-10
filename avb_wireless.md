@@ -154,6 +154,10 @@ A station acting as a talker shall address its stream frames as follows:
 
 A wireless listener shall accept stream frames whose destination is either its own MAC or the advertised destination address, and shall match streams by `stream_id`, mirroring AVB Lite listener behavior.
 
+### 3.5 Control Traffic
+
+This section's re-addressing applies to stream data frames only. ATDECC's ADP, ACMP and AECP frames cross the wireless hop unchanged, as through any bridge: group addressed ones, such as ADP's and ACMP's to `91:E0:F0:01:00:00`, stay group addressed, and individually addressed ones, such as AECP's, stay individually addressed. Their rate, a few frames a second for each entity, is well within what 802.11 delivers group addressed, so they need no translation, and a controller on the wired side discovers, reads and connects wireless entities as it does wired ones. gPTP over the hop is §2's; the access point takes part in MRP on its wireless port as a bridge does on any port.
+
 ---
 
 ## 4. Admission
@@ -247,5 +251,6 @@ The response carries the configuration the interface has after the command. Its 
 | Bridge never escalates to group addressing on the wireless port | §3.2 |
 | Wireless talker advertises MAAP DA, transmits to the U/L-flipped BSSID carrier | §3.3 |
 | Listener accepts own-MAC or advertised DA, matches by stream_id | §3.4 |
+| AP forwards ADP, ACMP and AECP unchanged in both directions | §3.5 |
 | Class B only by default over the wireless hop | §4 |
 | Stations, and APs running an ATDECC entity, answer GET_WIRELESS_STATUS, unsolicited on change | §5.1 |

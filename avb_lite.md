@@ -203,6 +203,7 @@ Required profile behavior:
 - **Media alignment:** Audio sample clocks, video frame timing, and AVTP presentation times must be derived from the PTP-disciplined clock so independently transported streams can be phase-aligned at receivers.
 - **Timestamping:** Hardware timestamping is mandatory at all endpoints, at NIC or PHY level. Switches are not required to be boundary clocks or transparent clocks.
 - **Sync interval:** 125 ms, log -3, for Sync; 1 s for Announce. Sync must be sent on that grid on average, not merely advertised with it.
+- **Delay request interval:** 1 s, log 0, as both the least and the most. A grandmaster shall advertise `logMessageInterval` 0 in every `Delay_Resp`, and followers send `Delay_Req` no faster than that on average (IEEE 1588-2019, 7.7.2.4), so the grandmaster answers one `Delay_Req` per follower a second, the load §1 counts.
 - **One-step and two-step:** A clock may be either; endpoints must follow both.
 - **Delay mechanism:** End-to-end delay measurement must be supported. Peer-to-peer delay measurement is outside the base profile.
 - **Unicast delay requests:** A grandmaster-capable endpoint shall support mixed multicast/unicast operation (IEEE 1588-2019, 16.9), answering a unicast `Delay_Req` with a unicast `Delay_Resp`. A follower should send its `Delay_Req` unicast, to the MAC address the grandmaster's Announce came from, and send them multicast again if no `Delay_Resp` answers. Announce, Sync and Follow_Up stay multicast. Endpoints then no longer receive every other endpoint's delay exchange.

@@ -171,7 +171,12 @@ It learns which station runs an entity from the source address of the entity's A
 
 ## 4. Admission
 
-The bridge applies SRP admission on the wireless port against a nominal link-rate cap (75% per SR class), and shall declare Talker Failed with `insufficient_bandwidth_for_traffic_class` for Class A toward the wireless port unless a non-default opt-in is set (§5.2). Implementations should log the admission basis and every rejection, so a relayed upstream failure can be told apart from a local decision.
+The access point applies SRP admission on its wireless port from each stream's TSpec, as a bridge does, but counting what 802.11 charges for: frames as well as bytes, and each listener station's own copy (§3.2), where a wired port carries one copy for every listener behind it. A stream's frames a second are its MaxIntervalFrames times its class's intervals a second, 4000 for Class B. The access point serves a listener station only while, with that station's copy, both of these hold:
+
+1. the frames a second of every stream it sends on the wireless port, each listener station's copy counted, stay within its frame budget: the individually addressed frames a second it can deliver in its BSS, as it measures or is configured with;
+2. their bandwidth stays within 75% of the link rate, for all SR classes together, as IEEE 802.1Q has it by default.
+
+Where a stream's first listener station would not fit, the access point declares Talker Failed with `insufficient_bandwidth` toward the wireless port; a further listener station that would not fit is not served, as one beyond the fan-out limit (§3.2), and counts in `listeners_unserved`. Class A toward the wireless port gets Talker Failed with `insufficient_bandwidth_for_traffic_class` whatever it takes, unless the non-default opt-in is set (§5.2), and is then admitted by the same two checks. Implementations should log the admission basis and every rejection, so a relayed upstream failure can be told apart from a local decision.
 
 Over 802.11 every frame costs airtime to contend for the medium and to be acknowledged, whatever its size, so a stream's frame rate counts more than its bytes. A Class B stream's own formats send one frame each Class B interval, 4000 a second: AAF at 12 samples a frame for 48 kHz, 24 for 96 kHz, and 48 for 192 kHz, where they fit one Ethernet frame (at 192 kHz, up to 7 channels of 32-bit samples). Stations and talkers that serve them shall offer these formats, at 2 channels as well as their full count, beside any others, and talkers sending toward a wireless hop should use them. A stereo stream takes a quarter of an 8-channel stream's bytes at the same frame rate, which leaves room on a busy hop. Milan's formats send a frame each Class A interval, 8000 a second, as 6 samples a frame at 48 kHz; carried in Class B, as two frames each interval, they take twice the frames of the hop.
 
@@ -266,5 +271,6 @@ The response carries the configuration the interface has after the command. Its 
 | AP also sends each ACMP frame individually addressed to the station running the entity it is for | §3.5 |
 | Station accepts ACMP to its own address, answers a repeated command once | §3.5 |
 | Class B only by default over the wireless hop | §4 |
+| AP admits from the TSpec against a frame budget and 75% of the link, each listener station's copy counted | §4 |
 | Stations and talkers serving a wireless hop offer AAF at a frame each Class B interval, at 2 channels and their full count | §4 |
 | Stations, and APs running an ATDECC entity, answer GET_WIRELESS_STATUS, unsolicited on change | §5.1 |

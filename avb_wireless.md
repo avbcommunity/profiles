@@ -228,12 +228,14 @@ The command carries nothing more. The response continues:
 | 56 | 4 | `downlink_unmapped` | An access point's group addressed stream frames with no listener mapping (§3.2) |
 | 60 | 4 | `downlink_dropped` | An access point's stream frames dropped for back-pressure on the wireless port |
 | 64 | 4 | `uplink_restored` | An access point's station stream frames given back their advertised destination (§3.3) |
-| 68 | 2 | `station_count` | The station entries that follow, on an access point; 0 on a station |
-| 70 | 8 × n | `stations` | Per associated station: its MAC (6 bytes), its RSSI in dBm, signed (1 byte, `0x7F` when not known), and flags (1 byte: bit 0 FTM_INITIATOR, bit 1 FTM_KNOWN, whether the access point knows the station's FTM capability); as many as fit the response, the rest left out |
+| 68 | 4 | `frame_budget` | An access point's frame budget for its wireless port (§4), in frames a second; 0 on a station |
+| 72 | 4 | `frames_committed` | The frames a second of the streams an access point sends on its wireless port, each listener station's copy counted (§4); 0 on a station |
+| 76 | 2 | `station_count` | The station entries that follow, on an access point; 0 on a station |
+| 78 | 8 × n | `stations` | Per associated station: its MAC (6 bytes), its RSSI in dBm, signed (1 byte, `0x7F` when not known), and flags (1 byte: bit 0 FTM_INITIATOR, bit 1 FTM_KNOWN, whether the access point knows the station's FTM capability); as many as fit the response, the rest left out |
 
 On an access point, the fields that only a station has, its RTT, servo error and FTM values, are left unknown: RTT_VALID and SERVO_ERROR_VALID clear, and the FTM fields as above. An access point may answer the station list from a cache refreshed outside the command's path, as where reading it means a call to a separate radio chip. With `bssid` and `ap_port_identity` a controller places a station under its access point; GET_AS_PATH names the bridge's clock but not its BSSID. Counters wrap. The response's `status` is SUCCESS, NO_SUCH_DESCRIPTOR for an `avb_interface_index` the entity does not have, NOT_SUPPORTED for an interface that is not wireless, or NOT_IMPLEMENTED from an entity without AVB Wireless support.
 
-An entity shall send the response unsolicited, with `u` set, to each controller registered for unsolicited notifications whenever `flags`, `time_mode`, `band`, `channel`, `channel_width`, `phy_generation`, `as_capable_reason`, the granted burst, `listeners_unserved`, `bssid`, `ap_port_identity` or `station_count` changes. The measurements and counters change too often for that; controllers poll them, once every 5 s at most.
+An entity shall send the response unsolicited, with `u` set, to each controller registered for unsolicited notifications whenever `flags`, `time_mode`, `band`, `channel`, `channel_width`, `phy_generation`, `as_capable_reason`, the granted burst, `listeners_unserved`, `frame_budget`, `frames_committed`, `bssid`, `ap_port_identity` or `station_count` changes. The measurements and counters change too often for that; controllers poll them, once every 5 s at most.
 
 ### 5.2 SET_WIRELESS_CONFIG
 

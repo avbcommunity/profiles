@@ -173,7 +173,9 @@ It learns which station runs an entity from the source address of the entity's A
 
 The bridge applies SRP admission on the wireless port against a nominal link-rate cap (75% per SR class), and shall declare Talker Failed with `insufficient_bandwidth_for_traffic_class` for Class A toward the wireless port unless a non-default opt-in is set (§5.2). Implementations should log the admission basis and every rejection, so a relayed upstream failure can be told apart from a local decision.
 
-Note that the deliverable unicast rate bounds the practical stream count: with roughly 8000 individually addressed packets per second available on the air, two Class B streams (or their fan-out equivalent) is a realistic ceiling per BSS, and the fan-out limit of §3.2 should be set accordingly.
+Over 802.11 every frame costs airtime to contend for the medium and to be acknowledged, whatever its size, so a stream's frame rate counts more than its bytes. A Class B stream's own formats send one frame each Class B interval, 4000 a second: AAF at 12 samples a frame for 48 kHz, 24 for 96 kHz, and 48 for 192 kHz, where they fit one Ethernet frame (at 192 kHz, up to 7 channels of 32-bit samples). Stations and talkers that serve them shall offer these formats beside any others, and talkers sending toward a wireless hop should use them. Milan's formats send a frame each Class A interval, 8000 a second, as 6 samples a frame at 48 kHz; carried in Class B, as two frames each interval, they take twice the frames of the hop.
+
+Note that the deliverable unicast rate bounds the practical stream count: with roughly 8000 individually addressed packets per second available on the air, two Class B streams of 4000 frames a second (or their fan-out equivalent) is a realistic ceiling per BSS, and the fan-out limit of §3.2 should be set accordingly.
 
 ---
 
@@ -264,4 +266,5 @@ The response carries the configuration the interface has after the command. Its 
 | AP also sends each ACMP frame individually addressed to the station running the entity it is for | §3.5 |
 | Station accepts ACMP to its own address, answers a repeated command once | §3.5 |
 | Class B only by default over the wireless hop | §4 |
+| Stations and talkers serving a wireless hop offer AAF at a frame each Class B interval | §4 |
 | Stations, and APs running an ATDECC entity, answer GET_WIRELESS_STATUS, unsolicited on change | §5.1 |

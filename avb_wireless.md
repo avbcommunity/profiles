@@ -173,12 +173,12 @@ It learns which station runs an entity from the source address of the entity's A
 
 The access point admits streams toward its wireless port by SRP, as a bridge does, with two additions for what 802.11 charges for: frames as well as bytes, and each listener station's own copy (§3.2), where a wired port carries one copy for every listener behind it.
 
-1. **Frames.** A stream's frames a second are its TSpec's MaxIntervalFrames times its class's intervals a second, 8000 for Class A and 4000 for Class B. The access point serves a listener station only while the frames a second of every stream it sends on the wireless port, each listener station's copy counted, stay within its frame budget: the individually addressed frames a second it can deliver in its BSS, as it measures or is configured with.
+1. **Frames.** A stream's frames a second are its TSpec's MaxIntervalFrames times its class's intervals a second, 8000 for Class A and 4000 for Class B. The access point serves a listener station only while the frames a second of every stream it sends on the wireless port, each listener station's copy counted, stay within its frame budget: 75% of the individually addressed frames a second it can deliver in its BSS, as it measures or is configured with, the rest left to best-effort traffic, as SRP leaves a quarter of a link's bandwidth.
 2. **Copies.** SRP's bandwidth admission on the wireless port counts each listener station's copy.
 
 Where a stream's first listener station would not fit, the access point declares Talker Failed with `insufficient_bandwidth` toward the wireless port. A further listener station that would not fit is not served, as one beyond the fan-out limit (§3.2), and counts in `listeners_unserved`. In the listener declaration it passes upstream, the access point counts a listener station it does not serve as AskingFailed, whatever the station declares, and it sends such a station no stream frames. Implementations should log the admission basis and every rejection, so a relayed upstream failure can be told apart from a local decision.
 
-**Class A.** The access point admits Class A toward its wireless port, by the same checks, only where its frame budget is at least 12000 frames a second, room for a Class A stream beside a Class B one, and while CLASS_A_ALLOWED is set (§5.2); otherwise it declares Talker Failed with `insufficient_bandwidth_for_traffic_class`. A Class A stream across the hop plays in time only where its talker's max transit time covers the latency the stream accumulates, the hop's included, so controllers raise it to that, as Milan talkers let them (informative).
+**Class A.** The access point admits Class A toward its wireless port, by the same checks, only where it delivers at least 12000 individually addressed frames a second, a frame budget of 9000 that holds one Class A stream with a quarter left to best effort, and while CLASS_A_ALLOWED is set (§5.2); otherwise it declares Talker Failed with `insufficient_bandwidth_for_traffic_class`. A Class A stream across the hop plays in time only where its talker's max transit time covers the latency the stream accumulates, the hop's included, so controllers raise it to that, as Milan talkers let them (informative).
 
 Over 802.11 every frame costs airtime to contend for the medium and to be acknowledged, whatever its size, so a stream's frame rate counts more than its bytes. A Class B stream's own formats send one frame each Class B interval, 4000 a second: AAF at 12 samples a frame for 48 kHz, 24 for 96 kHz, and 48 for 192 kHz, where they fit one Ethernet frame (at 192 kHz, up to 7 channels of 32-bit samples). Stations and talkers that serve them shall offer these formats, at 2 channels as well as their full count, beside any others, and talkers sending toward a wireless hop should use them. A stereo stream takes a quarter of an 8-channel stream's bytes at the same frame rate, which leaves room on a busy hop. Milan's formats send a frame each Class A interval, 8000 a second, as 6 samples a frame at 48 kHz; carried in Class B, as two frames each interval, they take twice the frames of the hop.
 
@@ -230,7 +230,7 @@ The command carries nothing more. The response continues:
 | 56 | 4 | `downlink_unmapped` | An access point's group addressed stream frames with no listener mapping (§3.2) |
 | 60 | 4 | `downlink_dropped` | An access point's stream frames dropped for back-pressure on the wireless port |
 | 64 | 4 | `uplink_restored` | An access point's station stream frames given back their advertised destination (§3.3) |
-| 68 | 4 | `frame_budget` | An access point's frame budget for its wireless port (§4), in frames a second; 0 on a station |
+| 68 | 4 | `frame_budget` | An access point's frame budget for its wireless port (§4), 75% of the frames a second it can deliver; 0 on a station |
 | 72 | 4 | `frames_committed` | The frames a second of the streams an access point sends on its wireless port, each listener station's copy counted (§4); 0 on a station |
 | 76 | 2 | `station_count` | The station entries that follow, on an access point; 0 on a station |
 | 78 | 8 × n | `stations` | Per associated station: its MAC (6 bytes), its RSSI in dBm, signed (1 byte, `0x7F` when not known), and flags (1 byte: bit 0 FTM_INITIATOR, bit 1 FTM_KNOWN, whether the access point knows the station's FTM capability); as many as fit the response, the rest left out |
@@ -245,10 +245,10 @@ The command and the response carry, after `avb_interface_index`:
 
 | Offset | Length | Field | Value |
 |--------|--------|-------|-------|
-| 4 | 1 | `config_flags` | Bit 0 CLASS_A_ALLOWED: an access point admits Class A toward its wireless port (§4). It is set by default where the access point's frame budget is at least 12000 frames a second and clear elsewhere; a controller may clear it to keep Class A off the hop. Other bits zero. |
+| 4 | 1 | `config_flags` | Bit 0 CLASS_A_ALLOWED: an access point admits Class A toward its wireless port (§4). It is set by default where the access point delivers at least 12000 frames a second (§4) and clear elsewhere; a controller may clear it to keep Class A off the hop. Other bits zero. |
 | 5 | 3 | reserved | 0 |
 
-The response carries the configuration the interface has after the command. Its `status` is SUCCESS; NO_SUCH_DESCRIPTOR; BAD_ARGUMENTS for a reserved bit, or CLASS_A_ALLOWED on a station or on an access point whose frame budget is below 12000 frames a second; ENTITY_ACQUIRED or ENTITY_LOCKED when another controller holds the entity; NOT_SUPPORTED for an interface that is not wireless; or NOT_IMPLEMENTED. CLASS_A_ALLOWED does not persist across restarts, so the default comes back. A change applies to streams already declared as well as new ones: the access point runs admission again for them, so a Talker Failed it declared for Class A clears without waiting for the talker to declare again. A change is reported with an unsolicited GET_WIRELESS_STATUS response.
+The response carries the configuration the interface has after the command. Its `status` is SUCCESS; NO_SUCH_DESCRIPTOR; BAD_ARGUMENTS for a reserved bit, or CLASS_A_ALLOWED on a station or on an access point that delivers fewer than 12000 frames a second; ENTITY_ACQUIRED or ENTITY_LOCKED when another controller holds the entity; NOT_SUPPORTED for an interface that is not wireless; or NOT_IMPLEMENTED. CLASS_A_ALLOWED does not persist across restarts, so the default comes back. A change applies to streams already declared as well as new ones: the access point runs admission again for them, so a Talker Failed it declared for Class A clears without waiting for the talker to declare again. A change is reported with an unsolicited GET_WIRELESS_STATUS response.
 
 ---
 
@@ -276,6 +276,6 @@ The response carries the configuration the interface has after the command. Its 
 | Station accepts ACMP to its own address, answers a repeated command once | §3.5 |
 | AP admits from the TSpec against its frame budget and SRP's bandwidth, each listener station's copy counted | §4 |
 | AP passes a listener station it does not serve upstream as AskingFailed, and sends it no stream frames | §4 |
-| AP admits Class A only with a frame budget of at least 12000 frames a second, while CLASS_A_ALLOWED is set | §4 |
+| AP admits Class A only where it delivers at least 12000 frames a second, while CLASS_A_ALLOWED is set | §4 |
 | Stations and talkers serving a wireless hop offer AAF at a frame each Class B interval, at 2 channels and their full count | §4 |
 | Stations, and APs running an ATDECC entity, answer GET_WIRELESS_STATUS, unsolicited on change | §5.1 |

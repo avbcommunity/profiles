@@ -157,7 +157,15 @@ A wireless listener shall accept stream frames whose destination is either its o
 
 ### 3.5 Control Traffic
 
-This section's re-addressing applies to stream data frames only. ATDECC's ADP, ACMP and AECP frames cross the wireless hop unchanged, as through any bridge: group addressed ones, such as ADP's and ACMP's to `91:E0:F0:01:00:00`, stay group addressed, and individually addressed ones, such as AECP's, stay individually addressed. Their rate, a few frames a second for each entity, is well within what 802.11 delivers group addressed, so they need no translation, and a controller on the wired side discovers, reads and connects wireless entities as it does wired ones. gPTP over the hop is §2's; the access point takes part in MRP on its wireless port as a bridge does on any port.
+The re-addressing above applies to stream data frames. ATDECC's ADP and AECP frames cross the wireless hop unchanged, as through any bridge: ADP's, group addressed to `91:E0:F0:01:00:00`, stay group addressed, and AECP's stay individually addressed. Their rate, a few frames a second for each entity, is well within what 802.11 delivers group addressed, and an advertisement lost on the air is repeated within seconds. gPTP over the hop is §2's; the access point takes part in MRP on its wireless port as a bridge does on any port.
+
+ACMP needs more. Its frames are group addressed too, and a group addressed frame toward a station is neither acknowledged nor retried (§3), while a controller tries an ACMP command only twice, so over a busy hop a connect or disconnect can fail outright. The access point therefore also sends each ACMP frame toward its wireless port as an individually addressed copy to the station that runs the entity it is for:
+
+- for a CONNECT_TX, DISCONNECT_TX, GET_TX_STATE or GET_TX_CONNECTION command, the talker;
+- for a CONNECT_RX, DISCONNECT_RX or GET_RX_STATE command, the listener;
+- for a CONNECT_TX or DISCONNECT_TX response, the listener, and for any other response, the controller.
+
+It learns which station runs an entity from the source address of the entity's ADP advertisements on the wireless port. The group frame goes out as well, for stations that watch ACMP. A station accepts ACMP addressed to its own address as well as to `91:E0:F0:01:00:00`, and answers a command it receives twice, by its controller and `sequence_id`, once. ACMP a station sends goes to the access point individually addressed on the air, acknowledged and retried, as all a station's frames do. With that, a controller on the wired side discovers, reads and connects wireless entities as it does wired ones.
 
 ---
 
@@ -252,6 +260,8 @@ The response carries the configuration the interface has after the command. Its 
 | Bridge never escalates to group addressing on the wireless port | §3.2 |
 | Wireless talker advertises MAAP DA, transmits to the U/L-flipped BSSID carrier | §3.3 |
 | Listener accepts own-MAC or advertised DA, matches by stream_id | §3.4 |
-| AP forwards ADP, ACMP and AECP unchanged in both directions | §3.5 |
+| AP forwards ADP and AECP unchanged in both directions | §3.5 |
+| AP also sends each ACMP frame individually addressed to the station running the entity it is for | §3.5 |
+| Station accepts ACMP to its own address, answers a repeated command once | §3.5 |
 | Class B only by default over the wireless hop | §4 |
 | Stations, and APs running an ATDECC entity, answer GET_WIRELESS_STATUS, unsolicited on change | §5.1 |

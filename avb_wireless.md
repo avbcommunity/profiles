@@ -151,6 +151,8 @@ A station acting as a talker shall address its stream frames as follows:
 3. Where the listener is another station in the same BSS, per-listener unicast copies addressed per AVB Lite unicast transport apply; the AP relays individually addressed frames without the group addressed penalty.
 4. Group addressed stream transmission by a station is permitted only as a last-resort compatibility fallback and should be expected to carry no more than a few hundred packets per second.
 
+**Caution (informative).** As the recipient of a station talker's frames, the access point bounds the station's frame rate by the Block Ack window it grants and the receive buffers it keeps for them. One access point tested with this profile, a host processor with a radio coprocessor, passed the coprocessor its platform's default Wi-Fi configuration: a receive Block Ack window of 6 frames, with 10 static and 32 dynamic receive buffers. It granted 6-frame windows on every TID, and a station talker managed 1,250 to 1,700 frames a second, under half of one Class B stream's 4000. Access points are best configured with a Block Ack window and receive buffers sized for stream traffic, and tested with a station talker at the frame rates they admit.
+
 ### 3.4 Listener Behavior
 
 A wireless listener shall accept stream frames whose destination is either its own MAC or the advertised destination address, and shall match streams by `stream_id`, mirroring AVB Lite listener behavior.

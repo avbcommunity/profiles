@@ -32,7 +32,7 @@ Supporting Class B means sending and receiving Class B's own frames, 12 samples 
 
 Since every device supports Class B, any talker and listener can always meet in it.
 
-Class A carries a stream with less latency, 2 ms across seven hops against Class B's 50 ms (IEEE 802.1BA), and Milan's streams are all Class A, so a device that supports Class B alone does not reach Milan devices (informative).
+Class A carries a stream with less latency, 2 ms across seven hops against Class B's 50 ms (IEEE 802.1BA). Milan requires Class A and not Class B, so a device that supports Class B alone reaches only those Milan devices that also support Class B (informative).
 
 ---
 

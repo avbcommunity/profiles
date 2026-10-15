@@ -17,7 +17,7 @@ This profile covers a single 802.11 infrastructure hop: one access point that is
 
 Mode B and unicast translation are interim: when a platform exposes the standard carriers (802.1AS-2020 §12 over FTM or TM, 802.11aa GCR/DMS for group delivery), implementations should migrate to them. The wire formats are chosen so that migration changes the carrier, not the payload.
 
-Class B is the wireless hop's own class: its formats take half the frames of Class A's (§4). IEEE 802.1BA excludes Class A over 802.11 media, whose latency cannot meet Class A's 2 ms bound; this profile admits Class A as an exception, on an access point that can carry it, so that talkers that send only Class A, as Milan's do, can reach stations (§4).
+Class B is the wireless hop's own class: its formats take half the frames of Class A's (§4). IEEE 802.1BA excludes Class A over 802.11 media, whose latency cannot meet Class A's 2 ms bound; this profile admits Class A as an exception, on an access point that can carry it, so that talkers that send only Class A, as Milan requires and most Milan devices do, can reach stations (§4).
 
 ---
 
@@ -186,7 +186,7 @@ Over 802.11 every frame costs airtime to contend for the medium and to be acknow
 
 Note that the deliverable unicast rate bounds the practical stream count: an access point that delivers roughly 8000 individually addressed frames a second has a frame budget of 6000, one Class B stream of 4000 frames a second or its fan-out equivalent, too few for any Class A stream, and the fan-out limit of §3.2 should be set accordingly.
 
-**Caution (informative).** A Milan format carried in Class B has a MaxIntervalFrames of 2, which a Milan network otherwise never carries: Milan's streams are all Class A, one frame each interval. IEEE 802.1Q clause 34 and Milan Table 4.4 count each frame's overhead (header and tag, FCS, preamble and inter-frame gap) once per frame, MaxIntervalFrames times each interval. One wired bridge tested with this profile counted it once per interval instead, reserved too little, and passed 7380 of such a stream's 8000 frames a second while passing every frame of a 12-sample stream. Admission and shaping, the access point's included, are best tested at a MaxIntervalFrames above 1 as well as at 1, and talkers that use Class B's own formats avoid the case.
+**Caution (informative).** A Milan format carried in Class B has a MaxIntervalFrames of 2, which a Milan network otherwise never carries: Milan sends its formats in Class A, one frame each interval. IEEE 802.1Q clause 34 and Milan Table 4.4 count each frame's overhead (header and tag, FCS, preamble and inter-frame gap) once per frame, MaxIntervalFrames times each interval. One wired bridge tested with this profile counted it once per interval instead, reserved too little, and passed 7380 of such a stream's 8000 frames a second while passing every frame of a 12-sample stream. Admission and shaping, the access point's included, are best tested at a MaxIntervalFrames above 1 as well as at 1, and talkers that use Class B's own formats avoid the case.
 
 ---
 

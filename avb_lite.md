@@ -1,4 +1,4 @@
-# AVB Lite Specification
+# AVB Lite Profile
 
 A profile that gives AVB endpoints a working, if degraded, path over Ethernet switches that are not AVB bridges, unmanaged consumer switches included, using Layer 2 mechanisms alone.
 

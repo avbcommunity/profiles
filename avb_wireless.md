@@ -1,4 +1,4 @@
-# AVB Wireless Specification
+# AVB Wireless Profile
 
 A profile for extending AVB and AVB Lite media streaming across an IEEE 802.11 hop: a wireless access point acting as a bridge to a wired AVB or AVB Lite domain, and Wi-Fi station endpoints acting as talkers and listeners.
 

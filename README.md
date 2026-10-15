@@ -2,8 +2,11 @@
 AVB Community Profiles
 
 ## audio
-- AVB Lite Profile
+- Basic Audio Profile
 - Extended Audio Profile
+
+## network
+- AVB Lite Profile
 
 ## wireless
 - AVB Wireless Profile

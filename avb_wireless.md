@@ -12,12 +12,12 @@ This profile covers a single 802.11 infrastructure hop: one access point that is
 
 1. **Time synchronization** (§2) in one of two modes. Mode A, the preferred mode, is IEEE 802.1AS-2020 §12, gPTP over Fine Timing Measurement or Timing Measurement with the §12.7 element in those frames. Mode B is supported as an interim carrier for platforms whose Wi-Fi stacks cannot put that element there: the grandmaster's time in the access point's beacons, mapped to the access point's TSF, with FTM measuring only the link delay.
 2. **Unicast stream translation** (§3), because 802.11 delivers group addressed frames roughly an order of magnitude slower than individually addressed frames, in both directions.
-3. **Admission** (§4): counting frames as well as bandwidth, Class B the hop's own class, and Class A only on an access point that can carry it.
+3. **Admission** (§4): counting frames as well as bandwidth, Class B the hop's own class, and Class A only on an access point that can carry it, where a controller allows it.
 4. **Discovery and status** (§5): a status query that tells controllers which interfaces are wireless, which access point a station uses, and how the hop's link and time hold.
 
 Mode B and unicast translation are interim: when a platform exposes the standard carriers (802.1AS-2020 §12 over FTM or TM, 802.11aa GCR/DMS for group delivery), implementations should migrate to them. The wire formats are chosen so that migration changes the carrier, not the payload.
 
-Class B is the wireless hop's own class: its formats take half the frames of Class A's (§4). IEEE 802.1BA excludes Class A over 802.11 media, whose latency cannot meet Class A's 2 ms bound; this profile admits Class A as an exception, on an access point that can carry it, so that talkers that send only Class A, as Milan requires and most Milan devices do, can reach stations (§4).
+Class B is the wireless hop's own class: its formats take half the frames of Class A's (§4). IEEE 802.1BA excludes Class A over 802.11 media, whose latency cannot meet Class A's 2 ms bound; this profile admits Class A as an exception, on an access point that can carry it and only where a controller allows it, so that talkers that send only Class A, as Milan requires and most Milan devices do, can reach stations (§4).
 
 ---
 
@@ -169,18 +169,46 @@ ACMP needs more. Its frames are group addressed too, and a group addressed frame
 
 It learns which station runs an entity from the source address of the entity's ADP advertisements on the wireless port. The group frame goes out as well, for stations that watch ACMP. A station accepts ACMP addressed to its own address as well as to `91:E0:F0:01:00:00`, and answers a command it receives twice, by its controller and `sequence_id`, once. ACMP a station sends goes to the access point individually addressed on the air, acknowledged and retried, as all a station's frames do. With that, a controller on the wired side discovers, reads and connects wireless entities as it does wired ones.
 
+### 3.6 Stream Class
+
+Class B is the hop's own class (§4), so a station listener asks for it: it sets CLASS_B (IEEE 1722.1-2021 Table 8-4) in each CONNECT_TX command it sends, the command Milan calls PROBE_TX.
+
+A talker that keeps ACMP connection state, as IEEE 1722.1 Clause 8 specifies, sends each stream in one class at a time, which its listeners set:
+
+1. With no other listener connected, a CONNECT_TX command sets the stream's class: Class B where CLASS_B is set, Class A where it is clear. The requesting listener's own earlier connection does not count as another.
+2. While another listener is connected, a command asking for the other class leaves the class as it is: the talker answers SUCCESS with the stream's current class in the response's CLASS_B flag, and the listener reserves the stream in that class.
+3. A talker does not refuse a command for the class it asks for.
+
+A Milan talker keeps no listener state and does not use CLASS_B (Milan v1.3 §5.5.2.7, Table 5.25). It sends its streams in Class A, which reach stations only as §4 admits Class A.
+
+Setting CLASS_B departs from Milan, whose senders set it to 0 (Table 5.25). Milan entities do not use the flag, so the departure changes nothing between them. This profile departs from Milan only in ways that leave Milan entities working as Milan specifies, so an entity may conform to both.
+
+### 3.7 Encapsulation on the Air
+
+On the wireless hop, each stream data frame is one MSDU, carried as IEEE 802.11 carries any Ethernet frame, with the destination address §3.2 and §3.3 give it. Every station and access point shall accept stream frames carried this way. IEEE 802.11's own aggregation, A-MSDU and A-MPDU, may combine them for transmission. A device shall use any other encapsulation, such as several AVTPDUs in one MSDU, only toward a peer that has indicated support for it, by means outside this profile. Such encapsulations are not part of this profile, and other implementations need not understand them.
+
+### 3.8 User Priority on the Air
+
+IEEE 802.11 maps a frame's user priority (UP), its PCP, to an access category (IEEE 802.11-2020 Table 10-1). At the default SR class priorities (IEEE 802.1Q Table 6-5), Class A's frames would go out as AC_BE and Class B's as AC_BK, the categories with the least favorable access to the medium. The access point should transmit stream data frames toward stations at UP 5, AC_VI, whatever their PCP.
+
+The UP stays on the hop. A station shall transmit its stream frames at the UP their PCP gives. On wired egress the access point shall give stream frames the PCP of their SR class, whatever UP they crossed the air at, keyed by `stream_id` as it restores their destination address (§3.3), never a PCP derived from the UP. A stream frame leaving the hop at another PCP would no longer be SR class traffic to the wired bridges, which would queue it without the shaper or remap it at an SRP domain boundary.
+
+**Note (informative).** Stations sending their own stream frames at AC_VI as well would also contend with the access point's downlink in the same category. Where this was tested, the station's downlink delivery fell by more than its uplink gained.
+
 ---
 
 ## 4. Admission
 
 The access point admits streams toward its wireless port by SRP, as a bridge does, with two additions for what 802.11 charges for: frames as well as bytes, and each listener station's own copy (§3.2), where a wired port carries one copy for every listener behind it.
 
-1. **Frames.** A stream's frames a second are its TSpec's MaxIntervalFrames times its class's intervals a second, 8000 for Class A and 4000 for Class B. The access point serves a listener station only while the frames a second of every stream it sends on the wireless port, each listener station's copy counted, stay within its frame budget: 75% of the individually addressed frames a second it can deliver in its BSS, as it measures or is configured with, the rest left to best-effort traffic, as SRP leaves a quarter of a link's bandwidth.
+1. **Frames.** A stream's frames a second are its TSpec's MaxIntervalFrames times its class's intervals a second, 8000 for Class A and 4000 for Class B. The access point serves a listener station only while the frames a second of every stream it sends on the wireless port, each listener station's copy counted, stay within its frame budget: 75% of the individually addressed frames a second it can deliver in its BSS, as it measures or is configured with, the rest left to best-effort traffic, as SRP leaves a quarter of a link's bandwidth. The deliverable rate is counted in the same unit as the streams' frames, stream frames delivered to stations, whatever aggregation of them the access point uses (§3.7).
 2. **Copies.** SRP's bandwidth admission on the wireless port counts each listener station's copy.
 
 Where a stream's first listener station would not fit, the access point declares Talker Failed with `insufficient_bandwidth` toward the wireless port. A further listener station that would not fit is not served, as one beyond the fan-out limit (§3.2), and counts in `listeners_unserved`. In the listener declaration it passes upstream, the access point counts a listener station it does not serve as AskingFailed, whatever the station declares, and it sends such a station no stream frames. Implementations should log the admission basis and every rejection, so a relayed upstream failure can be told apart from a local decision.
 
-**Class A.** The access point admits Class A toward its wireless port, by the same checks, only where it delivers at least 12000 individually addressed frames a second, a frame budget of 9000 that holds one Class A stream with a quarter left to best effort, and while CLASS_A_ALLOWED is set (§5.2); otherwise it declares Talker Failed with `insufficient_bandwidth_for_traffic_class`. A Class A stream across the hop plays in time only where its talker's max transit time covers the latency the stream accumulates, the hop's included, so controllers raise it to that, as Milan talkers let them (informative).
+**Class A.** The access point admits Class A toward its wireless port, by the same checks, only where it delivers at least 12000 individually addressed frames a second, a frame budget of 9000 that holds one Class A stream with a quarter left to best effort, and while CLASS_A_ALLOWED is set (§5.2); otherwise it declares Talker Failed with `insufficient_bandwidth_for_traffic_class`. CLASS_A_ALLOWED is clear by default: IEEE 802.1BA excludes Class A over 802.11, and the hop's latency varies with contention and retransmission, so Class A crosses it only where a controller has allowed it.
+
+As any bridge does, the access point adds its wireless port's portTcMaxLatency to a Talker Advertise's Accumulated Latency (IEEE 802.1Q 35.2.2.8.6). On that port it includes the hop's queuing, contention for the medium and retransmissions, as the access point measures or is configured with, for each class it admits. A Class A stream across the hop plays in time only where its talker's max transit time covers the latency the stream accumulates, the hop's included, so controllers raise it to that, as Milan talkers let them (informative).
 
 Over 802.11 every frame costs airtime to contend for the medium and to be acknowledged, whatever its size, so a stream's frame rate counts more than its bytes. A Class B stream's own formats send one frame each Class B interval, 4000 a second: AAF at 12 samples a frame for 48 kHz, 24 for 96 kHz, and 48 for 192 kHz, where they fit one Ethernet frame (at 192 kHz, up to 7 channels of 32-bit samples). Stations and talkers that serve them shall offer these formats, at 2 channels as well as their full count, beside any others, and talkers sending toward a wireless hop should use them. A stereo stream takes a quarter of an 8-channel stream's bytes at the same frame rate, which leaves room on a busy hop. Milan's formats send a frame each Class A interval, 8000 a second, as 6 samples a frame at 48 kHz; carried in Class B, as two frames each interval, they take twice the frames of the hop.
 
@@ -249,10 +277,10 @@ The command and the response carry, after `avb_interface_index`:
 
 | Offset | Length | Field | Value |
 |--------|--------|-------|-------|
-| 4 | 1 | `config_flags` | Bit 0 CLASS_A_ALLOWED: an access point admits Class A toward its wireless port (§4). It is set by default where the access point delivers at least 12000 frames a second (§4) and clear elsewhere; a controller may clear it to keep Class A off the hop. Other bits zero. |
+| 4 | 1 | `config_flags` | Bit 0 CLASS_A_ALLOWED: an access point admits Class A toward its wireless port (§4). It is clear by default; a controller may set it on an access point that delivers at least 12000 frames a second (§4), and clear it to keep Class A off the hop again. Other bits zero. |
 | 5 | 3 | reserved | 0 |
 
-The response carries the configuration the interface has after the command. Its `status` is SUCCESS; NO_SUCH_DESCRIPTOR; BAD_ARGUMENTS for a reserved bit, or CLASS_A_ALLOWED on a station or on an access point that delivers fewer than 12000 frames a second; ENTITY_ACQUIRED or ENTITY_LOCKED when another controller holds the entity; NOT_SUPPORTED for an interface that is not wireless; or NOT_IMPLEMENTED. CLASS_A_ALLOWED does not persist across restarts, so the default comes back. A change applies to streams already declared as well as new ones: the access point runs admission again for them, so a Talker Failed it declared for Class A clears without waiting for the talker to declare again. A change is reported with an unsolicited GET_WIRELESS_STATUS response.
+The response carries the configuration the interface has after the command. Its `status` is SUCCESS; NO_SUCH_DESCRIPTOR; BAD_ARGUMENTS for a reserved bit, or CLASS_A_ALLOWED on a station or on an access point that delivers fewer than 12000 frames a second; ENTITY_ACQUIRED or ENTITY_LOCKED when another controller holds the entity; NOT_SUPPORTED for an interface that is not wireless; or NOT_IMPLEMENTED. CLASS_A_ALLOWED does not persist across restarts, so Class A is off again after one. A change applies to streams already declared as well as new ones: the access point runs admission again for them, so a Talker Failed it declared for Class A clears without waiting for the talker to declare again. A change is reported with an unsolicited GET_WIRELESS_STATUS response.
 
 ---
 
@@ -278,8 +306,15 @@ The response carries the configuration the interface has after the command. Its 
 | AP forwards ADP and AECP unchanged in both directions | §3.5 |
 | AP also sends each ACMP frame individually addressed to the station running the entity it is for | §3.5 |
 | Station accepts ACMP to its own address, answers a repeated command once | §3.5 |
-| AP admits from the TSpec against its frame budget and SRP's bandwidth, each listener station's copy counted | §4 |
+| Station listener sets CLASS_B in its CONNECT_TX (PROBE_TX) commands | §3.6 |
+| Talker keeping ACMP state takes a stream's class from its listeners, answers a request for the other class with the current one, never refuses for class | §3.6 |
+| Stream frames one per MSDU on the air, combined only by A-MSDU or A-MPDU; other encapsulations only toward a peer that has indicated support | §3.7 |
+| AP transmits stream frames toward stations at UP 5 (recommended) | §3.8 |
+| Station transmits its stream frames at the UP their PCP gives | §3.8 |
+| AP gives stream frames their SR class's PCP on wired egress, never one derived from the air UP | §3.8 |
+| AP admits from the TSpec against its frame budget and SRP's bandwidth, each listener station's copy counted, the deliverable rate counted in stream frames | §4 |
 | AP passes a listener station it does not serve upstream as AskingFailed, and sends it no stream frames | §4 |
-| AP admits Class A only where it delivers at least 12000 frames a second, while CLASS_A_ALLOWED is set | §4 |
+| AP admits Class A only where it delivers at least 12000 frames a second, while CLASS_A_ALLOWED is set, clear by default | §4 |
+| AP's portTcMaxLatency on its wireless port includes the hop's queuing, contention and retransmissions | §4 |
 | Stations and talkers serving a wireless hop offer AAF at a frame each Class B interval, at 2 channels and their full count | §4 |
 | Stations, and APs running an ATDECC entity, answer GET_WIRELESS_STATUS, unsolicited on change | §5.1 |

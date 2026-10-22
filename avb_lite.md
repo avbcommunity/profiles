@@ -419,7 +419,7 @@ Required behavior:
    destination MAC is transport addressing only.
 2. **Multiple listeners:** A talker supporting more than one listener per
    stream duplicates the stream frames per listener, each unicast, up to a
-   talker-defined fan-out limit (minimum 1, recommended 2). Bandwidth
+   talker-defined fan-out limit (minimum 1, recommended 5). Bandwidth
    admission (§6.5) counts each copy against the 75% egress budget.
 3. **Multicast escalation:** Beyond its unicast fan-out limit, a talker
    escalates the stream to a multicast destination address (MAAP-allocated)

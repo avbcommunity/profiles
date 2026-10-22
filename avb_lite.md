@@ -74,15 +74,15 @@ The decision to fall back, once made, shall be latched until the next Ethernet l
 
 #### 2.2.1 Promotion back to standard AVB is not permitted
 
-Once an endpoint has fallen back to AVB Lite, it shall not promote itself back to standard AVB / gPTP operation while the link remains up, even if conditions on the network appear to change (e.g. an AVB-aware bridge later joins the segment, or peers stop emitting the Endpoint Declaration TLV). Spontaneous promotion is prohibited because:
+Once an endpoint has fallen back to AVB Lite, it shall not promote itself back to standard AVB / gPTP operation while the link remains up, whatever the network later appears to show.
 
-- It would disrupt active CVU SRP admission, AVB Lite media streams, and the §2.3 beacon contract that other peers depend on.
-- A profile switch from standard PTP back to gPTP requires re-running BMCA, re-establishing peer-delay state, and re-issuing MSRP attributes — all of which would interrupt audio/video that is already flowing over AVB Lite.
-- Detection-side races could cause flapping if multiple endpoints attempt to promote concurrently.
+The reason is that an endpoint has no reliable way to tell an AVB-aware bridge that has started answering its `Pdelay_Req` from a non-AVB switch that is forwarding another gPTP device's Pdelay messages. Suppose a switch floods `01:80:C2:00:00:0E` and delivers the `Pdelay_Resp` of a single gPTP device that doesn't send the §2.1 Endpoint Declaration TLV. That response looks exactly like a bridge's: one responder, valid messages, no TLV. A fallen-back endpoint already has evidence from §2.2 that its path isn't AVB-aware. Promoting on such a response would therefore often be a false positive, and it would put the endpoint back into gPTP and MSRP on a path with no AVB-aware bridge.
 
-If the operator or controller knows the topology has changed and the network is now genuinely AVB-aware, promotion shall be initiated by an external action: either an Ethernet link-flap that re-arms the §2.2 evaluator, or a controller-issued reconfiguration command that restarts the PTP daemon. Implementations may expose a vendor-specific control to trigger such a restart, but the criteria for using it are out of scope for this profile.
+The cost is that an endpoint that fell back because an AVB-aware bridge answered late stays in AVB Lite until promotion is started externally. One example is a bridge whose gPTP starts after its ports come up.
 
-A future revision of this profile may define a coordinated, network-wide promotion protocol if real-world deployments demonstrate the need.
+If the operator or controller knows the topology has changed and the network is now genuinely AVB-aware, promotion shall be initiated by an external action. That is either an Ethernet link-flap that re-arms the §2.2 evaluator, or a controller-issued reconfiguration command that restarts the PTP daemon. Implementations may expose a vendor-specific control to trigger such a restart, but the criteria for using it are out of scope for this profile.
+
+A future revision of this profile may permit promotion if it defines a reliable way for an endpoint to identify an AVB-aware bridge.
 
 When falling back, the device must clearly advertise its active operating mode to the controller, through the status query defined in [§2.4](#24-mode-reporting), and must not use MSRP reservations for AVB Lite streams. AVB Lite streams must use the timing, QoS, admission-control, and conformance requirements defined by this profile.
 

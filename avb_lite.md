@@ -469,6 +469,8 @@ The media VLAN ID must be configurable, and every AVB Lite device in a system us
 
 Untagged media streams may be supported for simple networks, but carry no priority; VLAN 0 is preferred there.
 
+An endpoint receives frames in the media VLAN for as long as it runs AVB Lite, whether or not it listens to a stream: other endpoints' CVU SRP arrives there, their talkers' broadcast declarations as well as listeners' declarations sent to it. Many network interfaces drop frames of VLANs nothing on the computer has registered, in hardware, while VLAN filtering is on; the Intel I210 does by default. Such an endpoint adds the media VLAN to its interface's filter, or turns the filter off, as promiscuous reception does on some interfaces. Otherwise it hears no other endpoint's talkers or listeners.
+
 ### Priority tags
 
 A priority tag, VLAN ID 0, does not always survive a switch. A VLAN-aware switch assigns a frame tagged with VLAN ID 0 to the receiving port's untagged VLAN, and a port that sends that VLAN untagged sends the frame on without a tag: its priority counts at that switch and is lost beyond it. Some unmanaged switches do the same. A frame tagged with any other VLAN ID, the media VLAN 2 among them, keeps its tag. On the bench this profile was checked on, an unmanaged switch delivered an endpoint's PTP, sent with VLAN ID 0 and priority 7, untagged, while the same endpoint's VLAN 2 media kept their tags. So:
@@ -560,6 +562,7 @@ General stream requirements:
 | EEE enabled | Sync degrades, audible artifacts | Endpoints keep EEE off their own links (§6); managed switches configured per §7 |
 | PTP packets deprioritized by misconfigured switch | Sync collapses | Continuous offset monitoring; alarm at > 50 µs sustained |
 | Media VLAN missing on a managed switch | Media and CVU SRP dropped at the port; listeners never settle | Configure per §7, or use media VLAN 0 |
+| Media VLAN filtered by an endpoint's own interface | The endpoint hears no CVU SRP: its talkers find no listeners, its listeners no talkers | The endpoint adds the media VLAN to its interface's filter, or turns the filter off (§7) |
 | Unregistered multicast filtered (IGMP snooping) | PTP and ATDECC lost: endpoints free-run, entities disappear | Flood unregistered multicast (§7) |
 | More listeners than a talker's fan-out limit, escalation not allowed | The further listeners are refused with Talker Failed, failure code 2 | Allow escalation where the media VLAN is confined (§2.4, §6), or use a talker with a higher fan-out limit |
 | Priority tags removed by a switch | PTP, and media in VLAN 0, lose their priority past the first switch | Media VLAN 2; on managed switches, classify PTP by ethertype (§7) |

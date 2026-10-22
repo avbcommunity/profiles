@@ -70,7 +70,7 @@ Conditions 2 and 3 are evaluated identically whether the link just came up or ha
 
 If none of the three conditions fires — i.e. exactly one peer is responding with valid `Pdelay_Resp` messages and that peer is not advertising itself as an endpoint — the endpoint remains in standard AVB / gPTP operation, treating that lone responder as an AVB-aware bridge. Condition 1 continues to fire on any later-arriving endpoint TLV (e.g. a peer that boots and begins beaconing per §2.3), pulling the endpoint into AVB Lite without requiring a link-flap.
 
-The decision to fall back, once made, shall be latched until the next Ethernet link-up event to prevent flapping. Unlike 802.1AS's per-port `asCapable` flag — which can re-acquire automatically when Pdelay starts succeeding again — the AVB Lite fallback is a profile-level switch (gPTP → standard PTP) and is too invasive to bounce per packet. A link-up event is the canonical re-arming point.
+The decision to fall back, once made, shall be latched until the next Ethernet link-up event, which is the canonical re-arming point. Unlike 802.1AS's per-port `asCapable` flag, which can re-acquire automatically when Pdelay starts succeeding again, the fallback does not reverse when Pdelay responses return; §2.2.1 gives the reason.
 
 #### 2.2.1 Promotion back to standard AVB is not permitted
 

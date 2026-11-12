@@ -14,3 +14,6 @@ AVB Community Profiles
 ## video
 - Basic Video Profile
 - Extended Video Profile
+
+## voice
+- Voice Assistant Profile

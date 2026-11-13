@@ -39,7 +39,7 @@ An entity may conform to both Milan and this profile. The profile adds a stream 
 Points open in this draft:
 
 - A second playback stream mixed on the endpoint, for an assistant speaking over music from another talker, is reserved for a later revision (the MIX capability bit, §4.3).
-- Settings with no standard control type, such as indicator brightness, are left to the endpoint's maker. A pool of vendor-defined control types would need values from the MA-S's EUI-64 space.
+- Settings with no standard control type, such as indicator brightness, are left to the endpoint's maker. Further control types for this profile would come from the MA-S's pool of them, as the playout delay's does (§5).
 
 ---
 
@@ -243,6 +243,17 @@ A voice endpoint exposes its settings as AEM CONTROL descriptors (IEEE 1722.1-20
 
 An endpoint names each control in its descriptor so other controllers show it plainly, and keeps its settings across restarts. A control that changes the level of channel 1 also changes what the assistant hears; the voice activity byte is written after it (§3).
 
+**Playout delay.** A voice endpoint may also report the delay of its playback stream as a read-only CONTROL of this profile's own type, from the control-type pool of the AVB Lite Profile's MA-S:
+
+| Field | Value |
+|-------|-------|
+| `control_type` | `0x8C1F6436C1000001`, on the wire `8C 1F 64 36 C1 00 00 01` |
+| `control_value_type` | CONTROL_LINEAR_INT32, read-only |
+| Unit | SECONDS with a multiplier of −6: microseconds |
+| `signal_type`, `signal_index` | STREAM_INPUT, the voice unit's playback stream |
+
+Its value is how long after its presentation time a playback sample reaches the endpoint's analog output: every fixed and running delay the endpoint adds, its codec's output delay included. That is `playback_delay_ns` and `playout_adjust_us` (§4.3, §4.4) together, measured to the analog output rather than the speaker. The endpoint sends an unsolicited notification at once when the value steps by 5 ms or more, and at most once a second when it has drifted by 1 ms or more since the last. An assistant can align its echo canceller from the control alone, without §4 (informative).
+
 ---
 
 ## 6. Wireless Endpoints
@@ -272,6 +283,7 @@ A voice endpoint on an 802.11 hop meets the AVB Wireless Profile, and its stream
 | Sends GET_VOICE_CAPABILITIES and GET_VOICE_STATUS unsolicited on change, and each event as it happens, to registered controllers | §4.3 to §4.6 |
 | Gates its streams without unbinding them, and keeps no gate across a restart | §4.5 |
 | Exposes its settings as CONTROL descriptors of standard types, named in its capabilities, with unsolicited notifications | §5 |
+| With the playout delay control, reports it read-only, in microseconds, with the notifications of §5 | §5 |
 | On a wireless hop, meets the AVB Wireless Profile | §6 |
 | **Assistant** | |
 | Runs an ATDECC controller and registers for unsolicited notifications with each voice endpoint it serves | §4.2 |
